@@ -537,7 +537,7 @@ const MatchCalendar = () => {
               '&:hover': { transform: 'translateY(-2px)' },
             }}
           >
-            Сохранить все прогнозы ({Object.keys(pendingPredictions).length})
+            Сохранить все прогнозы test ({Object.keys(pendingPredictions).length})
           </Button>
         </Box>
       )}
