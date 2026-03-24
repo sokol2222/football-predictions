@@ -23,3 +23,44 @@
 ```bash
 git clone https://github.com/твой-логин/football-predictions.git
 cd football-predictions
+
+# Сруктура проекта
+football-predictions/
+├── src/                          # Исходный код
+│   ├── components/               # React компоненты
+│   │   ├── Auth/                 # Авторизация
+│   │   │   ├── AuthButton.jsx    # Кнопка входа/выхода
+│   │   │   ├── AuthModal.jsx     # Модальное окно логина
+│   │   │   └── ProtectedRoute.jsx # Защищённые маршруты
+│   │   ├── Calendar/             # Календарь
+│   │   │   └── MatchCalendar.jsx # Таблица матчей с прогнозами
+│   │   ├── Layout/               # Макет
+│   │   │   ├── Layout.jsx        # Обёртка с меню
+│   │   │   └── NavMenu.jsx       # Боковое меню (сворачиваемое)
+│   │   ├── Profile/              # Профиль
+│   │   │   ├── MyPredictions.jsx # Мои прогнозы
+│   │   │   ├── ParticipantsList.jsx # Участники (рейтинг)
+│   │   │   └── Profile.jsx       # Личный профиль
+│   │   ├── MatchCard.jsx         # Карточка матча
+│   │   ├── MatchList.jsx         # Список матчей (главная)
+│   │   ├── PredictionForm.jsx    # Форма прогноза
+│   │   ├── PredictionsTable.jsx  # Таблица прогнозов
+│   │   └── ThemeToggle.jsx       # Переключатель темы
+│   ├── contexts/                 # React Context
+│   │   ├── AuthContext.jsx       # Состояние авторизации
+│   │   └── ThemeContext.jsx      # Состояние темы
+│   ├── lib/                      # Библиотеки
+│   │   └── supabase.js           # Клиент Supabase
+│   ├── services/                 # API сервисы
+│   │   └── api.js                # Запросы к Supabase
+│   ├── App.jsx                   # Корневой компонент
+│   ├── main.jsx                  # Точка входа
+│   └── theme.js                  # Настройки темы MUI
+├── public/                       # Статические файлы
+├── .env                          # Переменные окружения (не в git)
+├── .env.example                  # Пример переменных (в git)
+├── .gitignore                    # Игнорируемые файлы
+├── index.html                    # HTML шаблон
+├── package.json                  # Зависимости
+├── vite.config.js                # Конфигурация Vite
+└── README.md                     # Документация
