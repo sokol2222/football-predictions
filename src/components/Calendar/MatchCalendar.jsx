@@ -31,7 +31,7 @@ import {
   SportsSoccer as SoccerIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
-import { createPrediction, getPredictions, updatePrediction, deletePrediction } from '../../services/api';
+import { createPrediction, getPredictions, updatePrediction, deletePrediction, getActiveTournament, getMatchesByTournamentAndRound, getRoundsByTournament } from '../../services/api';
 
 // Данные матчей
 const matchesData = [
@@ -474,6 +474,36 @@ const MatchCalendar = () => {
   });
 
   const hasPending = Object.keys(pendingPredictions).length > 0;
+
+useEffect(() => {
+  const testAPI = async () => {
+    try {
+      // 1. Получаем активный турнир
+      const { data: tournament } = await getActiveTournament();
+      console.log('🏆 Активный турнир:', tournament);
+      
+      if (!tournament) {
+        console.log('❌ Нет активного турнира');
+        return;
+      }
+      
+      // 2. Получаем туры
+      const { data: rounds } = await getRoundsByTournament(tournament.id);
+      console.log('📋 Туры:', rounds);
+      
+      // 3. Получаем матчи первого тура
+      if (rounds.length > 0) {
+        const { data: matches } = await getMatchesByTournamentAndRound(tournament.id, rounds[0].round_number);
+        console.log(`⚽ Матчи тура ${rounds[0].round_number}:`, matches);
+      }
+      
+    } catch (error) {
+      console.error('❌ Ошибка:', error);
+    }
+  };
+  
+  testAPI();
+}, []);
 
   return (
     <Box>
