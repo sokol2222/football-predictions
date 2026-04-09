@@ -5,588 +5,331 @@ import {
 } from 'material-react-table';
 import {
   Box,
-  Chip,
-  IconButton,
-  Tooltip,
   Typography,
-  Alert,
-  Snackbar,
+  Chip,
+  useTheme,
+  alpha,
+  Paper,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Button,
-  TextField,
-  alpha,
-  Paper,
-  Stack,
 } from '@mui/material';
 import {
-  Delete as DeleteIcon,
+  LocationOn as LocationIcon,
+  Flag as FlagIcon,
   FilterList as FilterIcon,
-  Save as SaveIcon,
-  Edit as EditIcon,
-  Check as CheckIcon,
-  Close as CloseIcon,
-  SportsSoccer as SoccerIcon,
+  Scoreboard as ScoreIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../../contexts/AuthContext';
-import { createPrediction, getPredictions, updatePrediction, deletePrediction, getActiveTournament, getMatchesByTournamentAndRound, getRoundsByTournament } from '../../services/api';
-
-// Данные матчей
-const matchesData = [
-  { id: 1, home: 'Акрон', away: 'ЦСКА', date: '04.04', time: '13:00', stadium: 'Акрон Арена', tour: 21 },
-  { id: 2, home: 'Зенит', away: 'Крылья Советов', date: '04.04', time: '15:15', stadium: 'Газпром Арена', tour: 21 },
-  { id: 3, home: 'Динамо', away: 'Оренбург', date: '04.04', time: '17:30', stadium: 'ВТБ Арена', tour: 21 },
-  { id: 4, home: 'Ахмат', away: 'Краснодар', date: '04.04', time: '19:45', stadium: 'Ахмат Арена', tour: 21 },
-  { id: 5, home: 'Нижний Новгород', away: 'Ростов', date: '05.04', time: '14:00', stadium: 'Нижний Новгород', tour: 21 },
-  { id: 6, home: 'Динамо (Махачкала)', away: 'Балтика', date: '05.04', time: '16:30', stadium: 'Анжи Арена', tour: 21 },
-  { id: 7, home: 'СПАРТАК', away: 'Локомотив', date: '05.04', time: '19:30', stadium: 'Открытие Арена', tour: 21 },
-  { id: 8, home: 'Сочи', away: 'Рубин', date: '06.04', time: '19:30', stadium: 'Фишт', tour: 21 },
-];
-
-const TOURS = [21];
+import { getActiveTournament, getMatches, getRoundsByTournament } from '../../services/api';
 
 const MatchCalendar = () => {
-  const { user } = useAuth();
-  const [predictions, setPredictions] = useState([]);
-  const [filterTour, setFilterTour] = useState('all');
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const theme = useTheme();
+  const [tournament, setTournament] = useState(null);
+  const [allMatches, setAllMatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingCell, setEditingCell] = useState(null);
-  const [editValue, setEditValue] = useState('');
-  const [pendingPredictions, setPendingPredictions] = useState({});
+  const [rounds, setRounds] = useState([]);
+  const [selectedRound, setSelectedRound] = useState('all');
 
   useEffect(() => {
-    loadPredictions();
+    loadTournamentAndMatches();
   }, []);
 
-  const loadPredictions = async () => {
+  const loadTournamentAndMatches = async () => {
     try {
       setLoading(true);
-      const { data } = await getPredictions();
-      setPredictions(data || []);
+      const { data: tournamentData } = await getActiveTournament();
+      setTournament(tournamentData);
+      
+      if (tournamentData) {
+        const { data: matchesData } = await getMatches(tournamentData.id);
+        setAllMatches(matchesData || []);
+        
+        const { data: roundsData } = await getRoundsByTournament(tournamentData.id);
+        setRounds(roundsData || []);
+      }
     } catch (error) {
-      showSnackbar('Ошибка загрузки прогнозов', 'error');
+      console.error('Ошибка загрузки:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const showSnackbar = (message, severity = 'success') => {
-    setSnackbar({ open: true, message, severity });
-  };
+  const filteredMatches = useMemo(() => {
+    if (selectedRound === 'all') return allMatches;
+    return allMatches.filter(match => match.round_number === selectedRound);
+  }, [allMatches, selectedRound]);
 
-  const tableData = useMemo(() => {
-    const filteredMatches = matchesData.filter(match => {
-      const tourMatch = filterTour === 'all' || match.tour === Number(filterTour);
-      return tourMatch;
+  const stats = useMemo(() => {
+    const total = allMatches.length;
+    const byRound = {};
+    const finished = allMatches.filter(m => m.is_finished && m.actual_home_score !== null).length;
+    allMatches.forEach(m => {
+      byRound[m.round_number] = (byRound[m.round_number] || 0) + 1;
     });
+    return { total, byRound, finished };
+  }, [allMatches]);
 
-    return filteredMatches.map(match => {
-      const userPrediction = predictions.find(p => 
-        p.match_id === match.id && 
-        (p.user_id === user?.id || p.friend_name === user?.email?.split('@')[0])
-      );
-      
-      const pending = pendingPredictions[match.id];
-      
-      return {
-        ...match,
-        id: match.id,
-        predictionId: userPrediction?.id || null,
-        homeScore: pending?.homeScore !== undefined ? pending.homeScore : (userPrediction?.home_score ?? ''),
-        awayScore: pending?.awayScore !== undefined ? pending.awayScore : (userPrediction?.away_score ?? ''),
-        hasPrediction: !!userPrediction || !!pending,
-        matchName: `${match.home} - ${match.away}`,
-      };
-    });
-  }, [predictions, user, filterTour, pendingPredictions]);
-
-  const startEditing = (row, columnId, currentValue) => {
-    setEditingCell({ rowId: row.id, columnId });
-    setEditValue(currentValue !== '' && currentValue !== null ? String(currentValue) : '');
+  // Функция для определения цвета счёта
+  const getScoreColor = (match) => {
+    if (!match.is_finished) return 'text.secondary';
+    if (match.actual_home_score > match.actual_away_score) return 'success.main';
+    if (match.actual_away_score > match.actual_home_score) return 'error.main';
+    return 'warning.main';
   };
 
-  const saveEdit = (row, columnId) => {
-    const newValue = editValue === '' ? null : Number(editValue);
-    
-    if (newValue !== null && (newValue < 0 || newValue > 20)) {
-      showSnackbar('Счёт должен быть от 0 до 20', 'error');
-      return;
-    }
-
-    setPendingPredictions(prev => {
-      const current = prev[row.id] || {};
-      return {
-        ...prev,
-        [row.id]: {
-          ...current,
-          [columnId === 'homeScore' ? 'homeScore' : 'awayScore']: newValue
-        }
-      };
-    });
-    
-    setEditingCell(null);
-    setEditValue('');
-    showSnackbar('Прогноз сохранён временно', 'info');
-  };
-
-  const cancelEdit = () => {
-    setEditingCell(null);
-    setEditValue('');
-  };
-
-  const saveAllPredictions = async () => {
-    let successCount = 0;
-    let errorCount = 0;
-    
-    for (const [matchId, prediction] of Object.entries(pendingPredictions)) {
-      if (prediction.homeScore !== undefined && prediction.awayScore !== undefined) {
-        try {
-          const match = matchesData.find(m => m.id === Number(matchId));
-          const existingPrediction = predictions.find(p => 
-            p.match_id === Number(matchId) && 
-            (p.user_id === user?.id || p.friend_name === user?.email?.split('@')[0])
-          );
-          
-          if (existingPrediction) {
-            await updatePrediction(existingPrediction.id, {
-              homeScore: Number(prediction.homeScore),
-              awayScore: Number(prediction.awayScore)
-            });
-          } else {
-            await createPrediction({
-              matchId: Number(matchId),
-              homeScore: Number(prediction.homeScore),
-              awayScore: Number(prediction.awayScore),
-              matchName: `${match.home} - ${match.away}`,
-            });
-          }
-          successCount++;
-        } catch (error) {
-          errorCount++;
-        }
-      }
-    }
-    
-    if (successCount > 0) {
-      showSnackbar(`✅ Сохранено ${successCount} прогнозов`, errorCount > 0 ? 'warning' : 'success');
-    }
-    
-    setPendingPredictions({});
-    await loadPredictions();
-  };
-
-  const handleDeletePrediction = async (row) => {
-    if (window.confirm('Удалить прогноз?')) {
-      try {
-        await deletePrediction(row.original.predictionId);
-        setPendingPredictions(prev => {
-          const newState = { ...prev };
-          delete newState[row.original.id];
-          return newState;
-        });
-        await loadPredictions();
-        showSnackbar('Прогноз удален');
-      } catch (error) {
-        showSnackbar('Ошибка при удалении', 'error');
-      }
-    }
-  };
-
-  // Красивая ячейка счёта
-  const ScoreCell = ({ value, row, columnId }) => {
-    const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
-    const hasValue = value !== '' && value !== null;
-    
-    if (isEditing) {
-      return (
-        <Paper
-          elevation={3}
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0.5,
-            p: 0.5,
-            borderRadius: 2,
-            bgcolor: 'background.paper',
-            animation: 'pulse 0.2s ease',
-            '@keyframes pulse': {
-              '0%': { transform: 'scale(0.95)', opacity: 0.7 },
-              '100%': { transform: 'scale(1)', opacity: 1 },
-            },
-          }}
-        >
-          <TextField
-            autoFocus
-            type="number"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => saveEdit(row, columnId)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveEdit(row, columnId);
-              if (e.key === 'Escape') cancelEdit();
-            }}
-            inputProps={{
-              min: 0,
-              max: 20,
-              style: { 
-                textAlign: 'center', 
-                width: '50px', 
-                fontSize: '18px',
-                fontWeight: 'bold',
-                padding: '6px 4px'
-              }
-            }}
-            variant="standard"
-            size="small"
-            sx={{
-              '& .MuiInput-root': {
-                '&:before': { borderBottomColor: 'primary.main' },
-                '&:after': { borderBottomColor: 'primary.main' },
-              },
-              '& input': { textAlign: 'center' }
-            }}
-          />
-          <IconButton 
-            size="small" 
-            color="success" 
-            onClick={() => saveEdit(row, columnId)}
-            sx={{ p: 0.5 }}
-          >
-            <CheckIcon fontSize="small" />
-          </IconButton>
-          <IconButton 
-            size="small" 
-            color="error" 
-            onClick={cancelEdit}
-            sx={{ p: 0.5 }}
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Paper>
-      );
-    }
-    
-    return (
-      <Box
-        onClick={() => user && startEditing(row, columnId, value)}
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 1,
-          minWidth: '70px',
-          py: 1,
-          px: 1.5,
-          borderRadius: 2,
-          cursor: user ? 'pointer' : 'default',
-          bgcolor: hasValue 
-            ? (theme) => alpha(theme.palette.success.main, 0.1)
-            : (theme) => alpha(theme.palette.grey[500], 0.05),
-          transition: 'all 0.2s ease',
-          border: '1px solid',
-          borderColor: hasValue 
-            ? (theme) => alpha(theme.palette.success.main, 0.3)
-            : (theme) => alpha(theme.palette.divider, 0.5),
-          '&:hover': {
-            transform: user ? 'translateY(-2px)' : 'none',
-            bgcolor: user 
-              ? (theme) => alpha(theme.palette.primary.main, 0.1)
-              : (theme) => alpha(theme.palette.grey[500], 0.05),
-            borderColor: user 
-              ? (theme) => theme.palette.primary.main
-              : (theme) => alpha(theme.palette.divider, 0.5),
-            boxShadow: user ? 2 : 0,
-          },
-        }}
-      >
-        {hasValue ? (
-          <>
-            <Typography 
-              sx={{ 
-                fontWeight: 800, 
-                fontSize: '20px',
-                lineHeight: 1,
-                color: 'success.main',
-              }}
-            >
-              {value}
-            </Typography>
-            <SoccerIcon sx={{ fontSize: 16, color: 'success.main', opacity: 0.7 }} />
-          </>
-        ) : (
-          <>
-            <Typography 
-              sx={{ 
-                fontWeight: 500, 
-                fontSize: '16px',
-                color: 'text.disabled',
-              }}
-            >
-              —
-            </Typography>
-            <EditIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-          </>
-        )}
-      </Box>
-    );
-  };
-
-  // Определяем колонки
   const columns = useMemo(
     () => [
       {
-        accessorKey: 'date',
-        header: 'Дата',
-        size: 100,
-        enableEditing: false,
-        Cell: ({ row }) => (
-          <Stack spacing={0.5}>
-            <Typography variant="body1" sx={{ fontWeight: 700, fontSize: '16px' }}>
-              {row.original.date}
-            </Typography>
-            <Chip 
-              label={row.original.time} 
-              size="small" 
-              variant="outlined"
-              sx={{ width: 'fit-content' }}
-            />
-          </Stack>
-        ),
-      },
-      {
-        accessorKey: 'matchName',
-        header: 'Матч',
-        size: 300,
-        enableEditing: false,
-        Cell: ({ row }) => (
-          <Box>
-            <Typography variant="body1" sx={{ fontWeight: 700, fontSize: '16px' }}>
-              {row.original.home}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mx: 1 }}>vs</Typography>
-            <Typography variant="body1" sx={{ fontWeight: 700, fontSize: '16px' }}>
-              {row.original.away}
-            </Typography>
-          </Box>
-        ),
-      },
-      {
-        accessorKey: 'stadium',
-        header: 'Стадион',
-        size: 150,
-        enableEditing: false,
+        accessorKey: 'round_number',
+        header: 'Тур',
+        size: 80,
         Cell: ({ cell }) => (
-          <Typography variant="body2" color="text.secondary">
+          <Chip
+            label={`${cell.getValue()} тур`}
+            size="small"
+            sx={{
+              fontWeight: 600,
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              color: theme.palette.primary.main,
+            }}
+          />
+        ),
+      },
+      {
+        accessorKey: 'match_number',
+        header: '№',
+        size: 60,
+        Cell: ({ cell }) => (
+          <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary' }}>
             {cell.getValue()}
           </Typography>
         ),
       },
       {
-        accessorKey: 'homeScore',
-        header: '🏠 Хозяева',
-        size: 130,
-        enableEditing: false,
+        accessorKey: 'match_date',
+        header: 'Дата',
+        size: 110,
         Cell: ({ cell, row }) => (
-          <ScoreCell 
-            value={cell.getValue()} 
-            row={row.original} 
-            columnId="homeScore"
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {new Date(cell.getValue()).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {row.original.match_time?.slice(0, 5)}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        accessorKey: 'group',
+        header: 'Гр.',
+        size: 50,
+        Cell: ({ cell }) => (
+          <Chip
+            label={cell.getValue()}
+            size="small"
+            sx={{
+              width: 32,
+              height: 32,
+              fontWeight: 700,
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+            }}
           />
         ),
       },
       {
-        accessorKey: 'awayScore',
-        header: '✈️ Гости',
-        size: 130,
-        enableEditing: false,
+        accessorKey: 'home_team',
+        header: 'Матч',
+        size: 280,
+        Cell: ({ row }) => (
+          <Box>
+            <Typography variant="body1" sx={{ fontWeight: 500 }}>
+              {row.original.home_team} — {row.original.away_team}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {row.original.home_team_code} — {row.original.away_team_code}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        accessorKey: 'score',
+        header: 'Счёт',
+        size: 100,
+        enableSorting: true,
+        sortingFn: (rowA, rowB) => {
+          const scoreA = rowA.original.actual_home_score || 0;
+          const scoreB = rowB.original.actual_home_score || 0;
+          return scoreA - scoreB;
+        },
+        Cell: ({ row }) => {
+          const match = row.original;
+          const isFinished = match.is_finished;
+          const homeScore = match.actual_home_score;
+          const awayScore = match.actual_away_score;
+          const scoreColor = getScoreColor(match);
+          
+          if (!isFinished || homeScore === null) {
+            return (
+              <Chip
+                label="— : —"
+                size="small"
+                variant="outlined"
+                sx={{ minWidth: 70 }}
+              />
+            );
+          }
+          
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: 700,
+                  color: scoreColor,
+                  fontFamily: 'monospace',
+                  fontSize: '1.1rem',
+                }}
+              >
+                {homeScore} : {awayScore}
+              </Typography>              
+            </Box>
+          );
+        },
+      },
+      {
+        accessorKey: 'stadium',
+        header: 'Стадион',
+        size: 180,
         Cell: ({ cell, row }) => (
-          <ScoreCell 
-            value={cell.getValue()} 
-            row={row.original} 
-            columnId="awayScore"
+          <Box>
+            <Typography variant="body2" noWrap>
+              {cell.getValue()}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {row.original.city}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        accessorKey: 'country',
+        header: 'Страна',
+        size: 100,
+        Cell: ({ cell }) => (
+          <Chip
+            label={cell.getValue()}
+            size="small"
+            variant="outlined"
+            sx={{ fontSize: '0.7rem' }}
           />
         ),
       },
     ],
-    [user, editingCell, editValue],
+    [theme]
   );
 
   const table = useMaterialReactTable({
     columns,
-    data: tableData,
-    enableEditing: false,
+    data: filteredMatches,
     enablePagination: true,
     enableSorting: true,
     enableColumnFilters: true,
     enableGlobalFilter: true,
-    enableRowActions: true,
-    positionActionsColumn: 'last',
-    renderRowActions: ({ row }) => {
-      const hasPrediction = row.original.hasPrediction;
-      if (!user || !hasPrediction) return null;
-      
-      return (
-        <Tooltip title="Удалить прогноз">
-          <IconButton 
-            color="error" 
-            size="small"
-            onClick={() => handleDeletePrediction(row)}
-            sx={{
-              transition: 'transform 0.2s',
-              '&:hover': { transform: 'scale(1.1)' },
-            }}
-          >
-            <DeleteIcon />
-          </IconButton>
-        </Tooltip>
-      );
-    },
-    muiTableBodyRowProps: {
-      sx: {
-        '&:hover': {
-          bgcolor: (theme) => alpha(theme.palette.primary.main, 0.02),
-        },
-      },
-    },
-    muiTableHeadCellProps: {
-      sx: {
-        fontWeight: 700,
-        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
-      },
-    },
+    enableColumnOrdering: true,
     initialState: {
-      density: 'comfortable',
-      pagination: { pageSize: 10 },
+      pagination: { pageSize: 25 },
+      sorting: [{ id: 'match_number', desc: false }],
+      columnVisibility: { country: false },
     },
+    state: { isLoading: loading },
     localization: {
-      actions: 'Действия',
-      delete: 'Удалить',
-      search: 'Поиск',
+      search: 'Поиск матча, команды или стадиона',
+      clearSearch: 'Очистить',
+      rowsPerPage: 'Матчей на странице',
       showAll: 'Показать все',
-      rowsPerPage: 'Строк на странице',
+      all: 'Все',
     },
-    state: {
-      isLoading: loading,
+    muiTablePaperProps: {
+      elevation: 0,
+      sx: { borderRadius: 2, border: '1px solid', borderColor: 'divider' },
     },
   });
 
-  const hasPending = Object.keys(pendingPredictions).length > 0;
-
-useEffect(() => {
-  const testAPI = async () => {
-    try {
-      // 1. Получаем активный турнир
-      const { data: tournament } = await getActiveTournament();
-      console.log('🏆 Активный турнир:', tournament);
-      
-      if (!tournament) {
-        console.log('❌ Нет активного турнира');
-        return;
-      }
-      
-      // 2. Получаем туры
-      const { data: rounds } = await getRoundsByTournament(tournament.id);
-      console.log('📋 Туры:', rounds);
-      
-      // 3. Получаем матчи первого тура
-      if (rounds.length > 0) {
-        const { data: matches } = await getMatchesByTournamentAndRound(tournament.id, rounds[0].round_number);
-        console.log(`⚽ Матчи тура ${rounds[0].round_number}:`, matches);
-      }
-      
-    } catch (error) {
-      console.error('❌ Ошибка:', error);
-    }
-  };
-  
-  testAPI();
-}, []);
+  const finishedCount = stats.finished;
+  const totalCount = stats.total;
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom sx={{ mb: 3, fontWeight: 700 }}>
-        📅 Календарь матчей
-      </Typography>
+    <Box sx={{ p: 3 }}>
+      {/* Заголовок */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
+          📅 Календарь матчей
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          {tournament?.name} {tournament?.year}
+        </Typography>
+      </Box>
 
-      {/* Фильтры */}
-      <Box sx={{ p: 2, mb: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', bgcolor: 'background.paper', borderRadius: 2 }}>
+      {/* Фильтр по турам */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          mb: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+        }}
+      >
         <FilterIcon color="action" />
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Тур</InputLabel>
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          Показать:
+        </Typography>
+        <FormControl size="small" sx={{ minWidth: 180 }}>
           <Select
-            value={filterTour}
-            label="Тур"
-            onChange={(e) => setFilterTour(e.target.value)}
+            value={selectedRound}
+            onChange={(e) => setSelectedRound(e.target.value)}
+            displayEmpty
           >
-            <MenuItem value="all">Все туры</MenuItem>
-            {TOURS.map(tour => (
-              <MenuItem key={tour} value={tour}>{tour} тур</MenuItem>
+            <MenuItem value="all">📋 Все матчи ({totalCount})</MenuItem>
+            {rounds.map(round => (
+              <MenuItem key={round.round_number} value={round.round_number}>
+                Тур {round.round_number} ({stats.byRound[round.round_number] || 0} матчей)
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
         
-        <Chip 
-          label={`${tableData.length} матчей`} 
-          size="small" 
-          color="primary"
-          variant="outlined"
-        />
-      </Box>
+        {/* Индикатор сыгранных матчей */}
+        {finishedCount > 0 && (
+          <Chip
+            icon={<ScoreIcon />}
+            label={`Сыграно: ${finishedCount} / ${totalCount}`}
+            size="small"
+            color="info"
+            variant="outlined"
+          />
+        )}
+      </Paper>
 
       {/* Таблица */}
       <MaterialReactTable table={table} />
 
-      {/* Кнопка сохранения */}
-      {hasPending && (
-        <Box sx={{ 
-          position: 'sticky', 
-          bottom: 16, 
-          display: 'flex', 
-          justifyContent: 'flex-end',
-          mt: 2,
-          zIndex: 1000
-        }}>
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            onClick={saveAllPredictions}
-            startIcon={<SaveIcon />}
-            sx={{
-              boxShadow: 3,
-              borderRadius: 3,
-              px: 4,
-              py: 1.5,
-              fontWeight: 700,
-              textTransform: 'none',
-              fontSize: '16px',
-              transition: 'transform 0.2s',
-              '&:hover': { transform: 'translateY(-2px)' },
-            }}
-          >
-            Сохранить все прогнозы ({Object.keys(pendingPredictions).length})
-          </Button>
-        </Box>
-      )}
-
-      {/* Уведомления */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert 
-          onClose={() => setSnackbar({ ...snackbar, open: false })} 
-          severity={snackbar.severity}
-          sx={{ borderRadius: 2 }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+      {/* Легенда */}
+      <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Chip icon={<LocationIcon />} label="16 стадионов" size="small" variant="outlined" />
+        <Chip icon={<FlagIcon />} label="3 страны: США, Канада, Мексика" size="small" variant="outlined" />
+        <Chip label="Московское время (MSK)" size="small" variant="outlined" />
+        <Chip label="🟢 Победа хозяев" size="small" sx={{ bgcolor: alpha('#4caf50', 0.1) }} />
+        <Chip label="🔴 Победа гостей" size="small" sx={{ bgcolor: alpha('#f44336', 0.1) }} />
+        <Chip label="🟡 Ничья" size="small" sx={{ bgcolor: alpha('#ff9800', 0.1) }} />
+      </Box>
     </Box>
   );
 };

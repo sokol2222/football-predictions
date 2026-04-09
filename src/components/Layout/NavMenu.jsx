@@ -16,6 +16,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import BarChartIcon from '@mui/icons-material/BarChart'; // 👈 ДОБАВИТЬ
 
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -71,7 +72,7 @@ const StyledDrawer = styled(Drawer, { shouldForwardProp: (prop) => prop !== 'ope
 
 const NavMenu = ({ currentPage, onPageChange, children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktopOpen, setDesktopOpen] = useState(true); // Состояние для сворачивания
+  const [desktopOpen, setDesktopOpen] = useState(true);
   const { user } = useAuth();
   const theme = useTheme();
 
@@ -91,11 +92,12 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
     { id: 'home', label: 'Главная', icon: <HomeIcon /> },
     { id: 'calendar', label: 'Календарь матчей', icon: <CalendarMonthIcon /> },
     { id: 'participants', label: 'Участники', icon: <PeopleIcon /> },
+    { id: 'stats', label: 'Статистика', icon: <BarChartIcon /> },           // 👈 ДОБАВИТЬ
     { id: 'my-predictions', label: 'Мои прогнозы', icon: <ScoreboardIcon /> },
     { id: 'profile', label: 'Профиль', icon: <PersonIcon /> },
   ];
 
-  // Десктопное меню (сворачиваемое)
+  // Десктопное меню
   const desktopDrawer = (
     <StyledDrawer variant="permanent" open={desktopOpen}>
       <DrawerHeader>
@@ -105,7 +107,6 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
       </DrawerHeader>
       <Divider />
       
-      {/* Информация о пользователе (показываем полностью если меню открыто) */}
       {desktopOpen ? (
         <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
@@ -121,7 +122,6 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
           </Box>
         </Box>
       ) : (
-        // В свернутом виде только аватар
         <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}>
           <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
             {user?.email?.charAt(0).toUpperCase() || '?'}
@@ -131,7 +131,6 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
       
       <Divider />
       
-      {/* Список пунктов меню */}
       <List sx={{ flexGrow: 1 }}>
         {menuItems.map((item) => (
           <ListItem key={item.id} disablePadding sx={{ display: 'block' }}>
@@ -170,7 +169,6 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
       
       <Divider />
       
-      {/* Кнопка выхода */}
       <List>
         <ListItem disablePadding sx={{ display: 'block' }}>
           <ListItemButton
@@ -197,7 +195,7 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
     </StyledDrawer>
   );
 
-  // Мобильное меню (без изменений)
+  // Мобильное меню
   const mobileDrawer = (
     <Drawer
       variant="temporary"
@@ -256,7 +254,6 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
 
   return (
     <>
-      {/* Верхняя панель для мобильных */}
       <AppBar
         position="fixed"
         sx={{
@@ -284,31 +281,27 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
         </Toolbar>
       </AppBar>
 
-      {/* Мобильное меню */}
       {mobileDrawer}
-
-      {/* Десктопное меню (сворачиваемое) */}
       {desktopDrawer}
 
-      {/* Основной контент - этот Box должен быть в Layout, но для примера оставим */}
       <Box
         component="main"
         sx={{
-        flexGrow: 1,
-        p: 3,
-        width: { sm: `calc(100% - ${desktopOpen ? drawerWidth : collapsedDrawerWidth}px)` },
-        ml: { sm: `${desktopOpen ? drawerWidth : collapsedDrawerWidth}px` },
-        mt: { xs: 8, sm: 0 },
-        transition: theme.transitions.create(['width', 'margin'], {
+          flexGrow: 1,
+          p: 3,
+          width: { sm: `calc(100% - ${desktopOpen ? drawerWidth : collapsedDrawerWidth}px)` },
+          ml: { sm: `${desktopOpen ? drawerWidth : collapsedDrawerWidth}px` },
+          mt: { xs: 8, sm: 0 },
+          transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
-        }),
+          }),
         }}
-        >
+      >
         {children} 
-    </Box>
+      </Box>
     </>
   );
-}
+};
 
 export default NavMenu;

@@ -14,6 +14,7 @@ import MatchCalendar from './components/Calendar/MatchCalendar'
 import MyPredictions from './components/Profile/MyPredictions'
 import ParticipantsList from './components/Profile/ParticipantsList'
 import Profile from './components/Profile/Profile'
+import TournamentStats from './components/Stats/TournamentStats'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -29,6 +30,8 @@ function App() {
           return <MatchCalendar />;
         case 'participants':
           return <ParticipantsList />;
+        case 'stats':
+          return <TournamentStats />;  
         case 'my-predictions':
           return <MyPredictions />;
         case 'profile':
