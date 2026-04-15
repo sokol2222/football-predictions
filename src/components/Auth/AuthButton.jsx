@@ -17,6 +17,7 @@ const AuthButton = () => {
     handleClose();
   };
 
+  // Если пользователь НЕ авторизован — показываем кнопку Входа
   if (!user) {
     return (
       <>
@@ -33,6 +34,7 @@ const AuthButton = () => {
     );
   }
 
+  // Если пользователь авторизован — показываем аватар и меню
   const initials = user.email?.charAt(0).toUpperCase() || '?';
   const userName = user.email?.split('@')[0] || 'Пользователь';
 
@@ -46,11 +48,7 @@ const AuthButton = () => {
           {userName}
         </Typography>
       </Button>
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleClose}
-      >
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
         <MenuItem onClick={handleClose}>Мой профиль</MenuItem>
         <MenuItem onClick={handleClose}>Мои прогнозы</MenuItem>
         <MenuItem onClick={handleLogout}>Выйти</MenuItem>
