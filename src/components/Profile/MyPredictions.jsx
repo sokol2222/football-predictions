@@ -43,6 +43,8 @@ import {
   updatePrediction,
   isRoundOpen,
 } from '../../services/api';
+import { supabase } from '../../lib/supabase';
+
 
 const MyPredictions = () => {
   const { user } = useAuth();
@@ -153,60 +155,140 @@ const MyPredictions = () => {
     }));
   };
 
+  // Функция расчёта очков
+const calculatePointsForPrediction = (homeScore, awayScore, actualHome, actualAway) => {
+  if (actualHome === undefined || actualAway === undefined) return 0;
+  
+  // Точный счёт
+  if (homeScore === actualHome && awayScore === actualAway) {
+    return 3;
+  }
+  
+  // Разница голов
+  if ((homeScore - awayScore) === (actualHome - actualAway)) {
+    return 2;
+  }
+  
+  // Исход
+  const getOutcome = (home, away) => {
+    if (home > away) return 'home';
+    if (away > home) return 'away';
+    return 'draw';
+  };
+  
+  if (getOutcome(homeScore, awayScore) === getOutcome(actualHome, actualAway)) {
+    return 1;
+  }
+  
+  return 0;
+};
+
   // Сохранение всех прогнозов тура
   const handleSaveRound = async () => {
-    if (!roundStatus.is_open) {
-      showSnackbar('Невозможно сохранить: дедлайн прошёл', 'error');
-      return;
-    }
-    
-    setSaving(true);
-    let successCount = 0;
-    let errorCount = 0;
+  if (!roundStatus.is_open) {
+    showSnackbar('Невозможно сохранить: дедлайн прошёл', 'error');
+    return;
+  }
+  
+  setSaving(true);
+  let successCount = 0;
+  let errorCount = 0;
 
-    for (const [matchId, pending] of Object.entries(pendingPredictions)) {
-      const match = matches.find(m => m.id === Number(matchId));
-      if (!match) continue;
+  for (const [matchId, pending] of Object.entries(pendingPredictions)) {
+    const match = matches.find(m => m.id === Number(matchId));
+    if (!match) continue;
+    
+    if (pending.homeScore === undefined || pending.awayScore === undefined || 
+        pending.homeScore === '' || pending.awayScore === '') {
+      continue;
+    }
+    
+    try {
+      const existing = predictions[matchId];
       
-      if (pending.homeScore === undefined || pending.awayScore === undefined || 
-          pending.homeScore === '' || pending.awayScore === '') {
-        continue;
-      }
+      // Рассчитываем очки, если матч завершён
+      let pointsEarned = 0;
+      let isExact = false;
+      let isExactDiff = false;
+      let isCorrectResult = false;
       
-      try {
-        const existing = predictions[matchId];
+      if (match.is_finished && match.actual_home_score !== null) {
+        pointsEarned = calculatePointsForPrediction(
+          pending.homeScore,
+          pending.awayScore,
+          match.actual_home_score,
+          match.actual_away_score
+        );
         
-        if (existing) {
-          // Обновляем существующий прогноз
-          await updatePrediction(existing.id, {
-            homeScore: pending.homeScore,
-            awayScore: pending.awayScore,
-          });
+        // Определяем тип точности
+        if (pending.homeScore === match.actual_home_score && pending.awayScore === match.actual_away_score) {
+          isExact = true;
+        } else if ((pending.homeScore - pending.awayScore) === (match.actual_home_score - match.actual_away_score)) {
+          isExactDiff = true;
         } else {
-          // Создаём новый прогноз
-          await createPrediction({
-            matchId: Number(matchId),
-            homeScore: pending.homeScore,
-            awayScore: pending.awayScore,
-            matchName: `${match.home_team} - ${match.away_team}`,
-          });
+          const getOutcome = (home, away) => {
+            if (home > away) return 'home';
+            if (away > home) return 'away';
+            return 'draw';
+          };
+          isCorrectResult = getOutcome(pending.homeScore, pending.awayScore) === 
+                           getOutcome(match.actual_home_score, match.actual_away_score);
         }
-        successCount++;
-      } catch (error) {
-        errorCount++;
-        console.error('Ошибка сохранения:', error);
       }
+      
+      if (existing) {
+        // Обновляем существующий прогноз с очками
+        const { error } = await supabase
+          .from('predictions')
+          .update({ 
+            home_score: pending.homeScore,
+            away_score: pending.awayScore,
+            points_earned: pointsEarned,
+            is_exact_score: isExact,
+            is_exact_difference: isExactDiff,
+            is_correct_result: isCorrectResult,
+            updated_at: new Date()
+          })
+          .eq('id', existing.id);
+          
+        if (error) throw error;
+      } else {
+        // Создаём новый прогноз с очками
+        const { error } = await supabase
+          .from('predictions')
+          .insert({
+            match_id: Number(matchId),
+            user_id: user?.id,
+            home_score: pending.homeScore,
+            away_score: pending.awayScore,
+            match_name: `${match.home_team} — ${match.away_team}`,
+            friend_name: user?.email?.split('@')[0] || 'Аноним',
+            tournament_id: tournament.id,
+            points_earned: pointsEarned,
+            is_exact_score: isExact,
+            is_exact_difference: isExactDiff,
+            is_correct_result: isCorrectResult,
+            created_at: new Date()
+          });
+          
+        if (error) throw error;
+      }
+      successCount++;
+    } catch (error) {
+      errorCount++;
+      console.error('Ошибка сохранения:', error);
     }
-    
-    if (successCount > 0) {
-      showSnackbar(`✅ Сохранено ${successCount} прогнозов`, errorCount > 0 ? 'warning' : 'success');
-      await loadMatchesAndPredictions();
-    } else if (errorCount > 0) {
-      showSnackbar(`❌ Ошибка при сохранении ${errorCount} прогнозов`, 'error');
-    }
-    
-    setSaving(false);
-  };
+  }
+  
+  if (successCount > 0) {
+    showSnackbar(`✅ Сохранено ${successCount} прогнозов`, errorCount > 0 ? 'warning' : 'success');
+    await loadMatchesAndPredictions();
+  } else if (errorCount > 0) {
+    showSnackbar(`❌ Ошибка при сохранении ${errorCount} прогнозов`, 'error');
+  }
+  
+  setSaving(false);
+};
 
   // Форматирование даты
   const formatDate = (dateStr) => {

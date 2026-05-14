@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { Modal, Box, Tab, Tabs, TextField, Button, Alert } from '@mui/material';
+import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 const AuthModal = ({ open, onClose }) => {
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(0); // 0 - вход, 1 - регистрация
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -15,6 +15,7 @@ const AuthModal = ({ open, onClose }) => {
 
     try {
       if (tab === 0) {
+        // Вход
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password
@@ -22,6 +23,7 @@ const AuthModal = ({ open, onClose }) => {
         if (error) throw error;
         onClose();
       } else {
+        // Регистрация
         const { error } = await supabase.auth.signUp({
           email,
           password,
