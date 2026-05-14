@@ -16,7 +16,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import BarChartIcon from '@mui/icons-material/BarChart'; // 👈 ДОБАВИТЬ
+import BarChartIcon from '@mui/icons-material/BarChart';
+import TimelineIcon from '@mui/icons-material/Timeline';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -93,6 +94,8 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
     { id: 'calendar', label: 'Календарь матчей', icon: <CalendarMonthIcon /> },
     { id: 'participants', label: 'Участники', icon: <PeopleIcon /> },
     { id: 'stats', label: 'Статистика', icon: <BarChartIcon /> },           // 👈 ДОБАВИТЬ
+    { id: 'stats-adv', label: 'Статистика подробная', icon: <BarChartIcon /> },
+    { id: 'stage-stats', label: 'Статистика по этапам', icon: <TimelineIcon /> },
     { id: 'my-predictions', label: 'Мои прогнозы', icon: <ScoreboardIcon /> },
     { id: 'profile', label: 'Профиль', icon: <PersonIcon /> },
   ];

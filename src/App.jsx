@@ -15,6 +15,8 @@ import MyPredictions from './components/Profile/MyPredictions'
 import ParticipantsList from './components/Profile/ParticipantsList'
 import Profile from './components/Profile/Profile'
 import TournamentStats from './components/Stats/TournamentStats'
+import MatchStats from './components/Stats/MatchStats'
+import StageStats from './components/Stats/StageStats'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -32,6 +34,10 @@ function App() {
           return <ParticipantsList />;
         case 'stats':
           return <TournamentStats />;  
+        case 'stats-adv':
+          return <MatchStats />;
+        case 'stage-stats':
+          return <StageStats />;  
         case 'my-predictions':
           return <MyPredictions />;
         case 'profile':
@@ -45,6 +51,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
+        <AuthButton />
         <Layout currentPage={currentPage} onPageChange={setCurrentPage}>
           {renderPage()}
         </Layout>
