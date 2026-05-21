@@ -45,6 +45,7 @@ const teamCodes = {
 // ========== МАТЧИ ГРУППОВОГО ЭТАПА (МОСКОВСКОЕ ВРЕМЯ) ==========
 const groupMatches = [
   // 11 июня 2026
+  /*
   { match_number: 1, group: 'A', round: 1, home: 'Мексика', away: 'ЮАР', date: '2026-06-11', time: '22:00:00', stadium: 'Estadio Azteca', city: 'Мехико', country: 'Мексика' },
   
   // 12 июня 2026
@@ -61,7 +62,7 @@ const groupMatches = [
   { match_number: 8, group: 'D', round: 1, home: 'Австралия', away: 'Турция', date: '2026-06-14', time: '07:00:00', stadium: 'BC Place', city: 'Ванкувер', country: 'Канада' },
   { match_number: 9, group: 'E', round: 1, home: 'Германия', away: 'Кюрасао', date: '2026-06-14', time: '20:00:00', stadium: 'NRG Stadium', city: 'Хьюстон', country: 'США' },
   { match_number: 10, group: 'F', round: 1, home: 'Нидерланды', away: 'Япония', date: '2026-06-14', time: '23:00:00', stadium: 'AT&T Stadium', city: 'Арлингтон', country: 'США' },
-  /*
+  */
   // 15 июня 2026
   { match_number: 11, group: 'E', round: 1, home: 'Кот-д\'Ивуар', away: 'Эквадор', date: '2026-06-15', time: '02:00:00', stadium: 'Lincoln Financial Field', city: 'Филадельфия', country: 'США' },
   { match_number: 12, group: 'F', round: 1, home: 'Швеция', away: 'Тунис', date: '2026-06-15', time: '05:00:00', stadium: 'Estadio BBVA', city: 'Гваделупа', country: 'Мексика' },
@@ -85,12 +86,12 @@ const groupMatches = [
   { match_number: 24, group: 'K', round: 1, home: 'Узбекистан', away: 'Колумбия', date: '2026-06-18', time: '05:00:00', stadium: 'Estadio Azteca', city: 'Мехико', country: 'Мексика' },
   { match_number: 25, group: 'A', round: 2, home: 'Чехия', away: 'ЮАР', date: '2026-06-18', time: '19:00:00', stadium: 'Mercedes-Benz Stadium', city: 'Атланта', country: 'США' },
   { match_number: 26, group: 'B', round: 2, home: 'Швейцария', away: 'Босния и Герцеговина', date: '2026-06-18', time: '22:00:00', stadium: 'SoFi Stadium', city: 'Лос-Анджелес', country: 'США' },
-  */
+  
   // 19 июня 2026
-  { match_number: 27, group: 'B', round: 2, home: 'Канада', away: 'Катар', date: '2026-06-19', time: '01:00:00', stadium: 'BC Place', city: 'Ванкувер', country: 'Канада' },
+  /*{ match_number: 27, group: 'B', round: 2, home: 'Канада', away: 'Катар', date: '2026-06-19', time: '01:00:00', stadium: 'BC Place', city: 'Ванкувер', country: 'Канада' },
   { match_number: 28, group: 'A', round: 2, home: 'Мексика', away: 'Южная Корея', date: '2026-06-19', time: '04:00:00', stadium: 'Estadio Akron', city: 'Сапопан', country: 'Мексика' },
   { match_number: 29, group: 'D', round: 2, home: 'США', away: 'Австралия', date: '2026-06-19', time: '22:00:00', stadium: 'Lumen Field', city: 'Сиэтл', country: 'США' },
-  /*
+  */
   // 20 июня 2026
   { match_number: 30, group: 'C', round: 2, home: 'Шотландия', away: 'Марокко', date: '2026-06-20', time: '01:00:00', stadium: 'Gillette Stadium', city: 'Фоксборо', country: 'США' },
   { match_number: 31, group: 'C', round: 2, home: 'Бразилия', away: 'Гаити', date: '2026-06-20', time: '04:00:00', stadium: 'Lincoln Financial Field', city: 'Филадельфия', country: 'США' },
@@ -153,7 +154,7 @@ const groupMatches = [
   // 29 июня 2026
   { match_number: 71, group: 'G', round: 3, home: 'Новая Зеландия', away: 'Бельгия', date: '2026-06-29', time: '04:00:00', stadium: 'BC Place', city: 'Ванкувер', country: 'Канада' },
   { match_number: 72, group: 'G', round: 3, home: 'Египет', away: 'Иран', date: '2026-06-29', time: '04:00:00', stadium: 'Lumen Field', city: 'Сиэтл', country: 'США' },
-  */
+  
 ];
 
 // ========== ФУНКЦИЯ ПОЛУЧЕНИЯ КОДА КОМАНДЫ ==========

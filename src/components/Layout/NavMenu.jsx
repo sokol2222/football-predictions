@@ -293,7 +293,7 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - ${desktopOpen ? drawerWidth : collapsedDrawerWidth}px)` },
-          ml: { sm: `${desktopOpen ? drawerWidth : collapsedDrawerWidth}px` },
+          ml: { sm: `${desktopOpen ? drawerWidth : collapsedDrawerWidth}` },
           mt: { xs: 8, sm: 0 },
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,

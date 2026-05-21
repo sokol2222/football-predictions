@@ -7,7 +7,7 @@ import Typography from '@mui/material/Typography'
 import { AuthProvider } from './contexts/AuthContext'
 import theme from './theme'
 import MatchList from './components/MatchList'
-import AuthButton from './components/Auth/AuthButton'
+import AuthButton, { AuthModalProvider } from './components/Auth/AuthButton'
 import { useState } from 'react'
 import Layout from './components/Layout/Layout'
 import MatchCalendar from './components/Calendar/MatchCalendar'
@@ -27,7 +27,7 @@ function App() {
     console.log('Рендерим страницу:', currentPage);
       switch(currentPage) {
         case 'home':
-          return <MatchList />;
+          return <MatchList onNavigate={setCurrentPage}/>;
         case 'calendar':
           return <MatchCalendar />;
         case 'participants':
@@ -51,6 +51,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
+        <AuthModalProvider>
         <AuthButton />
         <Layout currentPage={currentPage} onPageChange={setCurrentPage}>
           {renderPage()}
@@ -64,6 +65,7 @@ function App() {
             <MatchList />
           </Paper>
         </Container>*/}
+        </AuthModalProvider>
       </AuthProvider>
     </ThemeProvider>
   )
