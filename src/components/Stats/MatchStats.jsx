@@ -36,6 +36,7 @@ import {
   EmojiEvents as FinishedIcon,
 } from '@mui/icons-material';
 import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament, isRoundOpen } from '../../services/api';
+import { getStageLabel } from '../../utils/stageUtils';
 
 // Функция расчёта очков
 const calculatePoints = (prediction, actualResult) => {
@@ -319,7 +320,7 @@ const MatchStats = () => {
                       const isOpen = roundStatus?.is_open;
                       return (
                         <MenuItem key={round} value={round}>
-                          Тур {round} ({matches.filter(m => m.round_number === round).length} матчей)
+                          {getStageLabel(round)} ({matches.filter(m => m.round_number === round).length} матчей)
                           {isOpen ? ' 🔒' : ' 🔓'}
                         </MenuItem>
                       );
@@ -353,7 +354,7 @@ const MatchStats = () => {
                           {matchData.matchName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Тур {matchData.round} • {new Date(matchData.date).toLocaleDateString()} {matchData.time?.slice(0, 5)}
+                          {getStageLabel(matchData.round)} • {new Date(matchData.date).toLocaleDateString()} {matchData.time?.slice(0, 5)}
                         </Typography>
                       </Box>
                     </TableCell>

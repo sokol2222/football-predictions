@@ -14,14 +14,17 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Alert,
 } from '@mui/material';
 import {
   LocationOn as LocationIcon,
   Flag as FlagIcon,
   FilterList as FilterIcon,
   Scoreboard as ScoreIcon,
+  EmojiEvents as EmojiEventsIcon
 } from '@mui/icons-material';
 import { getActiveTournament, getMatches, getRoundsByTournament } from '../../services/api';
+import { getStageLabel } from '../../utils/stageUtils';
 
 const MatchCalendar = () => {
   const theme = useTheme();
@@ -83,10 +86,10 @@ const MatchCalendar = () => {
       {
         accessorKey: 'round_number',
         header: 'Тур',
-        size: 80,
+        size: 100,
         Cell: ({ cell }) => (
           <Chip
-            label={`${cell.getValue()} тур`}
+            label={getStageLabel(cell.getValue())}
             size="small"
             sx={{
               fontWeight: 600,
@@ -259,7 +262,7 @@ const MatchCalendar = () => {
 
   const finishedCount = stats.finished;
   const totalCount = stats.total;
-
+  
   return (
     <Box sx={{ p: 3 }}>
       {/* Заголовок */}
@@ -300,7 +303,7 @@ const MatchCalendar = () => {
             <MenuItem value="all">📋 Все матчи ({totalCount})</MenuItem>
             {rounds.map(round => (
               <MenuItem key={round.round_number} value={round.round_number}>
-                Тур {round.round_number} ({stats.byRound[round.round_number] || 0} матчей)
+                {getStageLabel(round.round_number)} ({stats.byRound[round.round_number] || 0} матчей)
               </MenuItem>
             ))}
           </Select>
@@ -317,6 +320,23 @@ const MatchCalendar = () => {
           />
         )}
       </Paper>
+
+
+      {selectedRound !== 'all' && selectedRound >= 4 && filteredMatches.length === 0 && (
+        <Alert
+          severity="info" 
+          icon={<EmojiEventsIcon />}
+          sx={{ mb: 3, borderRadius: 2 }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            🏆 {getStageLabel(selectedRound)}
+          </Typography>
+          <Typography variant="body2">
+            Сетка плей-офф будет сформирована после завершения группового этапа.
+            Следите за обновлениями!
+          </Typography>
+        </Alert>
+      )}
 
       {/* Таблица */}
       <MaterialReactTable table={table} />

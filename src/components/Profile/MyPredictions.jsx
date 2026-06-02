@@ -46,6 +46,7 @@ import {
   updatePrediction,
   isRoundOpen,
 } from '../../services/api';
+import { getStageLabel } from '../../utils/stageUtils';
 
 const MyPredictions = () => {
   const theme = useTheme();
@@ -302,7 +303,7 @@ const MyPredictions = () => {
               value={round.round_number}
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <span>Тур {round.round_number}</span>
+                  <span>{getStageLabel(round.round_number)}</span>
                   {!round.is_open && round.deadline && (
                     <LockIcon fontSize="small" color="disabled" />
                   )}
@@ -475,7 +476,7 @@ const MyPredictions = () => {
                         }}
                       >
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                          Тур {round.round_number}
+                          {getStageLabel(round.round_number)}
                         </Typography>
                         <Typography variant="body2" color={isPast ? 'error' : 'text.secondary'}>
                           {isPast ? 'Дедлайн прошёл' : `До ${formatDeadline(round.deadline)}`}

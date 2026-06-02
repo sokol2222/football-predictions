@@ -128,7 +128,7 @@ const MatchList = ({ onNavigate }) => {
           {user ? `Привет, ${user.email?.split('@')[0]}! 👋` : 'Добро пожаловать! 🏆'}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Делай прогнозы на матчи {tournament?.name} {tournament?.year} и соревнуйся с друзьями
+          Делай прогнозы на матчи {tournament?.name} {tournament?.year}
         </Typography>
       </Box>
 

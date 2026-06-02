@@ -18,11 +18,12 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import TimelineIcon from '@mui/icons-material/Timeline';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 
-const drawerWidth = 240;
+const drawerWidth = 270;
 const collapsedDrawerWidth = 65;
 
 // Стили для открытого меню
@@ -93,9 +94,9 @@ const NavMenu = ({ currentPage, onPageChange, children }) => {
     { id: 'home', label: 'Главная', icon: <HomeIcon /> },
     { id: 'calendar', label: 'Календарь матчей', icon: <CalendarMonthIcon /> },
     { id: 'participants', label: 'Участники', icon: <PeopleIcon /> },
-    { id: 'stats', label: 'Статистика', icon: <BarChartIcon /> },           // 👈 ДОБАВИТЬ
-    { id: 'stats-adv', label: 'Статистика подробная', icon: <BarChartIcon /> },
-    { id: 'stage-stats', label: 'Статистика по этапам', icon: <TimelineIcon /> },
+    //{ id: 'stats', label: 'Статистика', icon: <BarChartIcon /> },           // 👈 ДОБАВИТЬ
+    { id: 'stats-adv', label: 'Статистика по матчам', icon: <BarChartIcon /> },
+    { id: 'stage-stats', label: 'Статистика прогнозистов', icon: <EmojiEventsIcon /> },
     { id: 'my-predictions', label: 'Мои прогнозы', icon: <ScoreboardIcon /> },
     { id: 'profile', label: 'Профиль', icon: <PersonIcon /> },
   ];

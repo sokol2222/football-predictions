@@ -1,14 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
+  MaterialReactTable,
+  useMaterialReactTable,
+} from 'material-react-table';
+import {
   Box,
   Typography,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
   Avatar,
   CircularProgress,
@@ -18,6 +16,7 @@ import {
   Tabs,
   Tab,
   Alert,
+  LinearProgress,
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
@@ -29,6 +28,7 @@ import {
   Info as InfoIcon,
 } from '@mui/icons-material';
 import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament } from '../../services/api';
+import { getStageLabel } from '../../utils/stageUtils';
 
 const calculatePoints = (prediction, actualResult) => {
   if (!actualResult || actualResult.home === undefined || actualResult.away === undefined) {
@@ -91,7 +91,6 @@ const StageStats = () => {
         const { data: matchesData } = await getMatches(tournamentData.id);
         setMatches(matchesData || []);
         
-        // Разделяем матчи по round_number (1-3 группа, 4+ плей-офф)
         const groupMatchesList = matchesData?.filter(m => m.round_number <= 3) || [];
         const playoffMatchesList = matchesData?.filter(m => m.round_number >= 4) || [];
         
@@ -118,10 +117,8 @@ const StageStats = () => {
         }
         setAllPredictions(predictionsMap);
         
-        // Рассчитываем статистику отдельно для каждого этапа
-        calculateStageStats(groupMatchesList, playoffMatchesList, participantsData, predictionsMap);
+        calculateStats(groupMatchesList, playoffMatchesList, participantsData, predictionsMap);
         
-        // Если нет матчей плей-офф, показываем групповой этап
         if (playoffMatchesList.length === 0 && activeStage === 'playoff') {
           setActiveStage('group');
         }
@@ -133,16 +130,14 @@ const StageStats = () => {
     }
   };
 
-  const calculateStageStats = (groupMatchesList, playoffMatchesList, participantsData, predictionsMap) => {
+  const calculateStats = (groupMatchesList, playoffMatchesList, participantsData, predictionsMap) => {
     const groupStatsList = [];
     const playoffStatsList = [];
     
     for (const participant of participantsData) {
-      // Статистика группового этапа (только матчи с round_number 1-3)
       const groupStat = calculateParticipantStats(participant, groupMatchesList, predictionsMap);
       groupStatsList.push({ ...participant, ...groupStat });
       
-      // Статистика плей-офф (только матчи с round_number 4+)
       const playoffStat = calculateParticipantStats(participant, playoffMatchesList, predictionsMap);
       playoffStatsList.push({ ...participant, ...playoffStat });
     }
@@ -160,13 +155,11 @@ const StageStats = () => {
     let diffCount = 0;
     let resultCount = 0;
     let predictionsCount = 0;
-    let possiblePoints = 0;
     let finishedMatches = 0;
     
     for (const match of matchesList) {
       if (match.is_finished && match.actual_home_score !== null) {
         finishedMatches++;
-        possiblePoints += 3;
         
         const prediction = predictionsMap[participant.user_id]?.[match.id];
         if (prediction) {
@@ -188,7 +181,7 @@ const StageStats = () => {
       }
     }
     
-    const accuracy = possiblePoints > 0 ? Math.round((totalPoints / possiblePoints) * 100) : 0;
+    const accuracy = finishedMatches > 0 ? Math.round((totalPoints / (finishedMatches * 3)) * 100) : 0;
     
     return {
       totalPoints,
@@ -196,118 +189,175 @@ const StageStats = () => {
       diffCount,
       resultCount,
       predictionsCount,
-      possiblePoints,
       accuracy,
       matchesCount: finishedMatches,
     };
   };
 
-  const renderStatsTable = (stats, title, icon, hasMatches, finishedMatchesCount) => {
-    if (!hasMatches) {
-      return (
-        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
-          Матчи этого этапа ещё не добавлены. Прогнозы появятся после добавления расписания.
-        </Alert>
-      );
-    }
-    
-    if (finishedMatchesCount === 0) {
-      return (
-        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
-          На этом этапе пока нет завершённых матчей. Статистика появится после окончания матчей.
-        </Alert>
-      );
-    }
-    
-    // Фильтруем участников, у которых есть прогнозы на этом этапе
-    const filteredStats = stats.filter(s => s.matchesCount > 0);
-    
-    if (filteredStats.length === 0) {
-      return (
-        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
-          Нет прогнозов на этом этапе. Сделайте прогнозы, чтобы увидеть статистику.
-        </Alert>
-      );
-    }
-    
-    return (
-      <>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          {icon}
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>{title}</Typography>
-          <Chip label={`${filteredStats.length} участников`} size="small" />
-          <Chip label={`${finishedMatchesCount} матчей`} size="small" variant="outlined" />
-        </Box>
-        
-        <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 4 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
-                <TableCell width={60} align="center">#</TableCell>
-                <TableCell>Участник</TableCell>
-                <TableCell align="center">Матчей</TableCell>
-                <TableCell align="center">Прогнозов</TableCell>
-                <TableCell align="center">🎯 Точных</TableCell>
-                <TableCell align="center">📊 Разница</TableCell>
-                <TableCell align="center">✅ Исход</TableCell>
-                <TableCell align="center">🏆 Очки</TableCell>
-                <TableCell align="center">📈 Точность</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredStats.map((participant, index) => (
-                <TableRow key={participant.user_id} hover>
-                  <TableCell align="center">
-                    {index < 3 ? (
-                      <TrophyIcon sx={{ color: index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32' }} />
-                    ) : (
-                      index + 1
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
-                        {participant.display_name.charAt(0).toUpperCase()}
-                      </Avatar>
-                      <Typography sx={{ fontWeight: 500 }}>{participant.display_name}</Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell align="center">{participant.matchesCount}</TableCell>
-                  <TableCell align="center">{participant.predictionsCount}</TableCell>
-                  <TableCell align="center">
-                    <Chip label={participant.exactCount} size="small" color="success" variant="outlined" />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip label={participant.diffCount} size="small" color="warning" variant="outlined" />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip label={participant.resultCount} size="small" color="info" variant="outlined" />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                      {participant.totalPoints}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Box sx={{ minWidth: 100 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ flex: 1, height: 6, bgcolor: alpha(theme.palette.primary.main, 0.2), borderRadius: 3 }}>
-                          <Box sx={{ width: `${participant.accuracy}%`, height: 6, bgcolor: 'primary.main', borderRadius: 3 }} />
-                        </Box>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {participant.accuracy}%
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </>
-    );
-  };
+  // Колонки для таблицы
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: 'rank',
+        header: '#',
+        size: 60,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const index = row.index;
+          return index < 3 ? (
+            <TrophyIcon sx={{ color: index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32' }} />
+          ) : (
+            index + 1
+          );
+        },
+      },
+      {
+        accessorKey: 'display_name',
+        header: 'Участник',
+        size: 200,
+        Cell: ({ row }) => (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
+              {row.original.display_name.charAt(0).toUpperCase()}
+            </Avatar>
+            <Typography sx={{ fontWeight: 500 }}>{row.original.display_name}</Typography>
+          </Box>
+        ),
+      },
+      {
+        accessorKey: 'matchesCount',
+        header: 'Матчей',
+        size: 80,
+        Cell: ({ cell }) => cell.getValue() || 0,
+      },
+      {
+        accessorKey: 'predictionsCount',
+        header: 'Прогнозов',
+        size: 100,
+        Cell: ({ cell }) => cell.getValue() || 0,
+      },
+      {
+        accessorKey: 'exactCount',
+        header: '🎯 Точных',
+        size: 100,
+        Cell: ({ cell }) => (
+          <Chip label={cell.getValue() || 0} size="small" color="success" variant="outlined" />
+        ),
+      },
+      {
+        accessorKey: 'diffCount',
+        header: '📊 Разница',
+        size: 100,
+        Cell: ({ cell }) => (
+          <Chip label={cell.getValue() || 0} size="small" color="warning" variant="outlined" />
+        ),
+      },
+      {
+        accessorKey: 'resultCount',
+        header: '✅ Исход',
+        size: 100,
+        Cell: ({ cell }) => (
+          <Chip label={cell.getValue() || 0} size="small" color="info" variant="outlined" />
+        ),
+      },
+      {
+        accessorKey: 'totalPoints',
+        header: '🏆 Очки',
+        size: 80,
+        Cell: ({ cell }) => (
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
+            {cell.getValue() || 0}
+          </Typography>
+        ),
+      },
+      {
+        accessorKey: 'accuracy',
+        header: '📈 Точность',
+        size: 120,
+        Cell: ({ cell }) => {
+          const accuracy = cell.getValue() || 0;
+          return (
+            <Box sx={{ minWidth: 100 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LinearProgress
+                  variant="determinate"
+                  value={accuracy}
+                  sx={{ flex: 1, height: 6, borderRadius: 3 }}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {accuracy}%
+                </Typography>
+              </Box>
+            </Box>
+          );
+        },
+      },
+    ],
+    [theme]
+  );
+
+  // Создаём таблицу
+  const table = useMaterialReactTable({
+  columns,
+  data: activeStage === 'group' ? groupStats : playoffStats,
+  enablePagination: true,
+  enableSorting: true,
+  enableColumnFilters: true,
+  enableGlobalFilter: true,
+  initialState: {
+    pagination: { pageSize: 10 },
+    sorting: [{ id: 'totalPoints', desc: true }],
+    density: 'compact',  // 👈 Компактный режим
+  },
+  state: { isLoading: loading },
+  // 👈 Включи компактный режим
+  density: 'compact',
+  enableRowNumbers: false,
+  enableFullScreenToggle: false,
+  enableHiding: false,
+  enableDensityToggle: true,  // Пользователь сможет сам менять плотность
+  localization: {
+    search: 'Поиск',
+    clearSearch: 'Очистить',
+    rowsPerPage: 'Строк',
+    showAll: 'Все',
+    all: 'Все',
+  },
+  layoutMode: 'semantic',
+  muiTableContainerProps: {
+    sx: {
+      maxHeight: 'calc(100vh - 200px)',
+      overflowX: 'auto',
+      overflowY: 'auto',
+    },
+  },
+  muiTablePaperProps: {
+    elevation: 0,
+    sx: { 
+      borderRadius: 2, 
+      border: '1px solid', 
+      borderColor: 'divider',
+      overflow: 'hidden',
+      width: '100%',
+    },
+  },
+  muiTableHeadCellProps: {
+    sx: { 
+      fontWeight: 700, 
+      backgroundColor: alpha(theme.palette.background.default, 0.5),
+      whiteSpace: 'nowrap',
+      py: 1,  // 👈 Уменьшенный padding
+      px: 1,  // 👈 Уменьшенный padding
+    },
+  },
+  muiTableBodyCellProps: {
+    sx: {
+      whiteSpace: 'nowrap',
+      py: 0.5,  // 👈 Уменьшенный padding
+      px: 1,    // 👈 Уменьшенный padding
+    },
+  },
+});
 
   if (loading) {
     return (
@@ -316,6 +366,12 @@ const StageStats = () => {
       </Box>
     );
   }
+
+  const currentStats = activeStage === 'group' ? groupStats : playoffStats;
+  const hasMatches = activeStage === 'group' ? hasGroupMatches : hasPlayoffMatches;
+  const finishedMatchesCount = activeStage === 'group' ? groupMatchesCount : playoffMatchesCount;
+  const title = activeStage === 'group' ? 'Групповой этап' : 'Плей-офф';
+  const icon = activeStage === 'group' ? <GroupIcon color="primary" /> : <PlayoffIcon color="secondary" />;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -384,9 +440,41 @@ const StageStats = () => {
         />
       </Tabs>
 
-      {/* Таблица статистики выбранного этапа */}
-      {activeStage === 'group' && renderStatsTable(groupStats, 'Групповой этап', <GroupIcon color="primary" />, hasGroupMatches, groupMatchesCount)}
-      {activeStage === 'playoff' && renderStatsTable(playoffStats, 'Плей-офф', <PlayoffIcon color="secondary" />, hasPlayoffMatches, playoffMatchesCount)}
+      {/* Сообщение, если нет матчей */}
+      {!hasMatches && (
+        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
+          {activeStage === 'group' 
+            ? 'Матчи группового этапа ещё не добавлены. Прогнозы появятся после добавления расписания.'
+            : '🏆 Сетка плей-офф будет сформирована после завершения группового этапа.'}
+        </Alert>
+      )}
+
+      {/* Сообщение, если нет завершённых матчей */}
+      {hasMatches && finishedMatchesCount === 0 && (
+        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
+          На этом этапе пока нет завершённых матчей. Статистика появится после окончания матчей.
+        </Alert>
+      )}
+
+      {/* Сообщение, если нет прогнозов */}
+      {hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length === 0 && (
+        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
+          Нет прогнозов на этом этапе. Сделайте прогнозы, чтобы увидеть статистику.
+        </Alert>
+      )}
+
+      {/* Таблица */}
+      {hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length > 0 && (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            {icon}
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>{title}</Typography>
+            <Chip label={`${currentStats.filter(s => s.predictionsCount > 0).length} участников`} size="small" />
+            <Chip label={`${finishedMatchesCount} матчей`} size="small" variant="outlined" />
+          </Box>
+          <MaterialReactTable table={table} />
+        </>
+      )}
 
       {/* Легенда */}
       <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
