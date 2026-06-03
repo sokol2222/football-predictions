@@ -375,10 +375,6 @@ const StageStats = () => {
   const title = activeStage === 'group' ? 'Групповой этап' : 'Плей-офф';
   const icon = activeStage === 'group' ? <GroupIcon color="primary" /> : <PlayoffIcon color="secondary" />;
 
-  console.log('activeStage', activeStage)
-  console.log('hasMatches', hasMatches)
-  console.log('finishedMatchesCount', finishedMatchesCount)
-   console.log('currentStats', currentStats)
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ mb: 3 }}>

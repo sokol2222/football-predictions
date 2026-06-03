@@ -37,8 +37,6 @@ const TournamentStats = () => {
   const [predictions, setPredictions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  console.log('predictions', )
-
   useEffect(() => {
     loadData();
   }, []);
