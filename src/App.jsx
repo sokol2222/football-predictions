@@ -17,8 +17,16 @@ import Profile from './components/Profile/Profile'
 import TournamentStats from './components/Stats/TournamentStats'
 import MatchStats from './components/Stats/MatchStats'
 import StageStats from './components/Stats/StageStats'
+import MaintenancePage from './components/Info/MaintenancePage'
 
 function App() {
+
+  const IS_MAINTENANCE_MODE = false; // true - показываем техработы, false - обычный режим
+
+  if (IS_MAINTENANCE_MODE) {
+    return <MaintenancePage />;
+  }
+
   const [currentPage, setCurrentPage] = useState('home');
 
   console.log('App рендерится, текущая страница:', currentPage);
