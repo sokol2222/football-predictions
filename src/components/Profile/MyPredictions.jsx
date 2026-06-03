@@ -188,6 +188,7 @@ const MyPredictions = () => {
             homeScore: pending.homeScore,
             awayScore: pending.awayScore,
             matchName: `${match.home_team} — ${match.away_team}`,
+            tournamentId: tournament?.id,
           });
         }
         successCount++;

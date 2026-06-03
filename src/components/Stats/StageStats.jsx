@@ -26,9 +26,11 @@ import {
   Group as GroupIcon,
   EmojiEvents as PlayoffIcon,
   Info as InfoIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
+import AnalyticsTab from './AnalyticsTab';
 
 const calculatePoints = (prediction, actualResult) => {
   if (!actualResult || actualResult.home === undefined || actualResult.away === undefined) {
@@ -373,11 +375,15 @@ const StageStats = () => {
   const title = activeStage === 'group' ? 'Групповой этап' : 'Плей-офф';
   const icon = activeStage === 'group' ? <GroupIcon color="primary" /> : <PlayoffIcon color="secondary" />;
 
+  console.log('activeStage', activeStage)
+  console.log('hasMatches', hasMatches)
+  console.log('finishedMatchesCount', finishedMatchesCount)
+   console.log('currentStats', currentStats)
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
-          📊 Статистика по этапам
+          📊 Статистика прогнозистов
         </Typography>
         <Typography variant="body1" color="text.secondary">
           {tournament?.name} {tournament?.year} — групповой этап и плей-офф
@@ -385,37 +391,46 @@ const StageStats = () => {
       </Box>
 
       {/* Общая информация */}
+      {/* Общая информация по ВЫБРАННОМУ этапу, а не по всему турниру */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={6} sm={3}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>{participants.length}</Typography>
-            <Typography variant="caption" color="text.secondary">Участников</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.secondary.main, 0.05) }}>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              {matches.filter(m => m.is_finished).length}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">Сыграно матчей</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.success.main, 0.05) }}>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              {groupStats.reduce((sum, s) => sum + s.exactCount, 0) + playoffStats.reduce((sum, s) => sum + s.exactCount, 0)}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">Точных счетов</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              {groupStats.reduce((sum, s) => sum + s.totalPoints, 0) + playoffStats.reduce((sum, s) => sum + s.totalPoints, 0)}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">Всего очков</Typography>
-          </Paper>
-        </Grid>
+      <Grid item xs={6} sm={3}>
+        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            {activeStage === 'group' 
+              ? groupStats.filter(s => s.matchesCount > 0).length 
+              : playoffStats.filter(s => s.matchesCount > 0).length}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">Участников</Typography>
+        </Paper>
+      </Grid>
+      <Grid item xs={6} sm={3}>
+        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.secondary.main, 0.05) }}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            {activeStage === 'group' ? groupMatchesCount : playoffMatchesCount}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">Сыграно матчей</Typography>
+        </Paper>
+      </Grid>
+      <Grid item xs={6} sm={3}>
+        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.success.main, 0.05) }}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            {activeStage === 'group' 
+              ? groupStats.reduce((sum, s) => sum + s.exactCount, 0)
+              : playoffStats.reduce((sum, s) => sum + s.exactCount, 0)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">Точных счетов</Typography>
+        </Paper>
+      </Grid>
+      <Grid item xs={6} sm={3}>
+        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            {activeStage === 'group' 
+              ? groupStats.reduce((sum, s) => sum + s.totalPoints, 0)
+              : playoffStats.reduce((sum, s) => sum + s.totalPoints, 0)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">Всего очков</Typography>
+        </Paper>
+      </Grid>
       </Grid>
 
       {/* Переключатель этапов */}
@@ -438,10 +453,16 @@ const StageStats = () => {
           iconPosition="start"
           disabled={!hasPlayoffMatches}
         />
+        <Tab 
+          value="analytics" 
+          label="📊 Динамика" 
+          icon={<TrendingUpIcon />} 
+          iconPosition="start"
+        />
       </Tabs>
 
       {/* Сообщение, если нет матчей */}
-      {!hasMatches && (
+      {activeStage !== 'analytics' && !hasMatches && (
         <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
           {activeStage === 'group' 
             ? 'Матчи группового этапа ещё не добавлены. Прогнозы появятся после добавления расписания.'
@@ -450,21 +471,22 @@ const StageStats = () => {
       )}
 
       {/* Сообщение, если нет завершённых матчей */}
-      {hasMatches && finishedMatchesCount === 0 && (
+      {activeStage !== 'analytics' && hasMatches && finishedMatchesCount === 0 && (
         <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
           На этом этапе пока нет завершённых матчей. Статистика появится после окончания матчей.
         </Alert>
       )}
 
       {/* Сообщение, если нет прогнозов */}
-      {hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length === 0 && (
+      {activeStage !== 'analytics' && hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length === 0 && (
         <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
           Нет прогнозов на этом этапе. Сделайте прогнозы, чтобы увидеть статистику.
         </Alert>
       )}
 
       {/* Таблица */}
-      {hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length > 0 && (
+      {/* Таблица для группового этапа и плей-офф */}
+      {activeStage !== 'analytics' && hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length > 0 && (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
             {icon}
@@ -475,6 +497,9 @@ const StageStats = () => {
           <MaterialReactTable table={table} />
         </>
       )}
+
+      {/* Аналитика */}
+      {activeStage === 'analytics' && <AnalyticsTab />}      
 
       {/* Легенда */}
       <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
