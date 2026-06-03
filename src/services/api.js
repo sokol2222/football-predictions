@@ -307,8 +307,6 @@ export const getTournamentParticipants = async (tournamentId) => {
     .from('tournament_participants')
     .select('id, user_id, tournament_id, display_name, avatar_url, joined_at')
     .eq('tournament_id', tournamentId);
-  
-console.log('getTournamentParticipants data', data)
 
   if (error) throw error;
   
@@ -380,8 +378,7 @@ export const getUserPredictionsByRound = async (userId, tournamentId, roundNumbe
 
 // Получить все прогнозы пользователя на турнир
 export const getUserPredictionsForTournament = async (userId, tournamentId) => {
-  try {
-    console.log('getUserPredictionsForTournament запущен');
+  try {    
     
     // 1. Сначала получаем все матчи турнира
     const { data: matches, error: matchesError } = await supabase
@@ -428,7 +425,6 @@ export const getUserPredictionsForTournament = async (userId, tournamentId) => {
       };
     });
     
-    console.log('getUserPredictionsForTournament data:', enrichedPredictions);
     return { data: enrichedPredictions };
     
   } catch (error) {
