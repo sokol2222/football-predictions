@@ -69,7 +69,7 @@ const TournamentInfo = ({ open, onClose }) => {
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
             <Chip label="2 балла" size="medium" color="warning" sx={{ minWidth: 80, fontWeight: 700 }} />
-            <Typography variant="body2">Правильно угаданный исход при правильно угаданной разнице мячей</Typography>
+            <Typography variant="body2">Правильно угаданный исход</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
             <Chip label="1 балл" size="medium" color="info" sx={{ minWidth: 80, fontWeight: 700 }} />
