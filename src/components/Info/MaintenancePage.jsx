@@ -77,7 +77,7 @@ const MaintenancePage = () => {
             ОРИЕНТИРОВОЧНОЕ ВРЕМЯ ВОЗВРАЩЕНИЯ
           </Typography>
           <Typography variant="h5" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
-            15:00 🕐
+            21:00 🕐
           </Typography>
         </Box>
         
