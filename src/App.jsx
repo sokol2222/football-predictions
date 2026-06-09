@@ -21,7 +21,7 @@ import MaintenancePage from './components/Info/MaintenancePage'
 
 function App() {
 
-  const IS_MAINTENANCE_MODE = true; // true - показываем техработы, false - обычный режим
+  const IS_MAINTENANCE_MODE = false; // true - показываем техработы, false - обычный режим
 
   if (IS_MAINTENANCE_MODE) {
     return <MaintenancePage />;

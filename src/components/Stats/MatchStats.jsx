@@ -26,11 +26,7 @@ import {
 } from '@mui/material';
 import {
   SportsSoccer as SoccerIcon,
-  CheckCircle as ExactIcon,
-  TrendingUp as ResultIcon,
-  Difference as DiffIcon,
   Lock as LockIcon,
-  LockOpen as LockOpenIcon,
   Schedule as ScheduleIcon,
   PlayArrow as LiveIcon,
   EmojiEvents as FinishedIcon,
@@ -38,25 +34,45 @@ import {
 import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament, isRoundOpen } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
 
-// Функция расчёта очков
-const calculatePoints = (prediction, actualResult) => {
-  if (!actualResult || actualResult.home === undefined || actualResult.away === undefined) {
-    return { points: 0, isExact: false, isCorrectResult: false, isExactDiff: false };
+// Функция для получения очков по прогнозу
+// Функция для получения очков по прогнозу
+const getPredictionPoints = (predictionStr, actualResult) => {
+  // Если нет результата матча — не показываем очки
+  if (!actualResult) {
+    return { points: null, label: '', color: 'transparent', tooltip: 'Матч не завершён' };
   }
   
-  const homeScore = prediction.homeScore;
-  const awayScore = prediction.awayScore;
+  if (!predictionStr || predictionStr === '—') {
+    return { points: 0, label: '0', color: '#9e9e9e', tooltip: 'Нет прогноза' };
+  }
+  
+  const parts = predictionStr.split(':');
+  const homeScore = parseInt(parts[0]);
+  const awayScore = parseInt(parts[1]);
   const actualHome = actualResult.home;
   const actualAway = actualResult.away;
   
+  // Точный счёт — 3 очка (зелёный)
   if (homeScore === actualHome && awayScore === actualAway) {
-    return { points: 3, isExact: true, isExactDiff: false, isCorrectResult: false };
+    return { 
+      points: 3, 
+      label: '+3', 
+      color: '#4caf50', 
+      tooltip: 'Точный счёт! +3 очка'
+    };
   }
   
+  // Разница голов — 2 очка (оранжевый)
   if ((homeScore - awayScore) === (actualHome - actualAway)) {
-    return { points: 2, isExact: false, isExactDiff: true, isCorrectResult: false };
+    return { 
+      points: 2, 
+      label: '+2', 
+      color: '#ff9800', 
+      tooltip: 'Угадана разница голов! +2 очка'
+    };
   }
   
+  // Угадан исход — 1 очко (синий)
   const getOutcome = (home, away) => {
     if (home > away) return 'home';
     if (away > home) return 'away';
@@ -64,10 +80,21 @@ const calculatePoints = (prediction, actualResult) => {
   };
   
   if (getOutcome(homeScore, awayScore) === getOutcome(actualHome, actualAway)) {
-    return { points: 1, isExact: false, isExactDiff: false, isCorrectResult: true };
+    return { 
+      points: 1, 
+      label: '+1', 
+      color: '#2196f3', 
+      tooltip: 'Угадан исход! +1 очко'
+    };
   }
   
-  return { points: 0, isExact: false, isExactDiff: false, isCorrectResult: false };
+  // Не угадал — 0 очков (красный)
+  return { 
+    points: 0, 
+    label: '0', 
+    color: '#f44336', 
+    tooltip: 'Мимо! 0 очков'
+  };
 };
 
 // Компонент статуса матча
@@ -86,7 +113,6 @@ const MatchStatus = ({ match }) => {
     );
   }
   
-  // Проверяем, прошёл ли дедлайн
   const now = new Date();
   const matchDateTime = new Date(`${match.match_date}T${match.match_time}`);
   
@@ -230,7 +256,8 @@ const MatchStats = () => {
         round: match.round_number,
         date: match.match_date,
         time: match.match_time,
-        actualResult: actualResult ? `${actualResult.home}:${actualResult.away}` : null,
+        actualResult: actualResult ? { home: actualResult.home, away: actualResult.away } : null,
+        actualResultStr: actualResult ? `${actualResult.home}:${actualResult.away}` : null,
         isFinished: match.is_finished,
         showPredictions,
         match,
@@ -346,50 +373,98 @@ const MatchStats = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {allMatchesData.map((matchData) => (
-                  <TableRow key={matchData.matchId} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {matchData.matchName}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {getStageLabel(matchData.round)} • {new Date(matchData.date).toLocaleDateString()} {matchData.time?.slice(0, 5)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      <MatchStatus match={matchData.match} />
-                    </TableCell>
-                    <TableCell align="center">
-                      {matchData.actualResult ? (
-                        <Chip
-                          icon={<SoccerIcon />}
-                          label={matchData.actualResult}
-                          size="small"
-                          color="primary"
-                          sx={{ fontWeight: 700 }}
-                        />
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">— : —</Typography>
-                      )}
-                    </TableCell>
-                    {matchData.predictions.map((pred, idx) => (
-                      <TableCell key={idx} align="center">
-                        {pred.isHidden ? (
-                          <Chip icon={<LockIcon />} label="🔒" size="small" variant="outlined" />
-                        ) : (
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {pred.prediction}
+                {allMatchesData.map((matchData) => {
+                  const actualResult = matchData.actualResult;
+                  
+                  return (
+                    <TableRow key={matchData.matchId} hover>
+                      <TableCell sx={{ fontWeight: 600 }}>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {matchData.matchName}
                           </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {getStageLabel(matchData.round)} • {new Date(matchData.date).toLocaleDateString()} {matchData.time?.slice(0, 5)}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        <MatchStatus match={matchData.match} />
+                      </TableCell>
+                      <TableCell align="center">
+                        {matchData.actualResultStr ? (
+                          <Chip
+                            icon={<SoccerIcon />}
+                            label={matchData.actualResultStr}
+                            size="small"
+                            color="primary"
+                            sx={{ fontWeight: 700 }}
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">— : —</Typography>
                         )}
                       </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
+                      {matchData.predictions.map((pred, idx) => {
+                        const predictionStr = pred.prediction;
+                        const { label, color, tooltip } = getPredictionPoints(predictionStr, actualResult);
+                        const isHidden = pred.isHidden;
+                        
+                        return (
+                          <TableCell 
+                            key={idx} 
+                            align="center"
+                            sx={{ p: 1 }}
+                          >
+                            {isHidden ? (
+                              <Chip icon={<LockIcon />} label="🔒" size="small" variant="outlined" />
+                            ) : (
+                              <Tooltip title={tooltip} arrow placement="top">
+                                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                    {predictionStr || '—'}
+                                  </Typography>
+                                  <Typography 
+                                    variant="caption" 
+                                    sx={{ 
+                                      fontWeight: 700, 
+                                      color: color,
+                                      minWidth: 28,
+                                    }}
+                                  >
+                                    {label}
+                                  </Typography>
+                                </Box>
+                              </Tooltip>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Легенда */}
+          <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#4caf50' }}>+3</Typography>
+              <Typography variant="caption">Точный счёт</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#ff9800' }}>+2</Typography>
+              <Typography variant="caption">Разница голов</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#2196f3' }}>+1</Typography>
+              <Typography variant="caption">Исход</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: '#f44336' }}>0</Typography>
+              <Typography variant="caption">Не угадал</Typography>
+            </Box>
+          </Box>
         </>
       )}
 
@@ -445,26 +520,51 @@ const MatchStats = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {singleMatchData.predictionsList.map((pred, index) => (
-                  <TableRow key={pred.participantId} hover>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: theme.palette.primary.main }}>
-                          {pred.participantName.charAt(0).toUpperCase()}
-                        </Avatar>
-                        <Typography variant="body2">{pred.participantName}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      {pred.isHidden ? (
-                        <Chip icon={<LockIcon />} label="Скрыто" size="small" variant="outlined" />
-                      ) : (
-                        <Chip label={pred.prediction} size="small" color="primary" sx={{ fontWeight: 600 }} />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {singleMatchData.predictionsList.map((pred, index) => {
+                  const actualResult = singleMatchData.actualResult;
+                  const predictionStr = pred.prediction;
+                  const { label, color, tooltip } = getPredictionPoints(predictionStr, actualResult);
+                  const isHidden = pred.isHidden;
+                  
+                  return (
+                    <TableRow key={pred.participantId} hover>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Avatar sx={{ width: 32, height: 32, bgcolor: theme.palette.primary.main }}>
+                            {pred.participantName.charAt(0).toUpperCase()}
+                          </Avatar>
+                          <Typography variant="body2">{pred.participantName}</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        {isHidden ? (
+                          <Chip icon={<LockIcon />} label="Скрыто" size="small" variant="outlined" />
+                        ) : (
+                          <Tooltip title={tooltip} arrow placement="top">
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                              <Chip 
+                                label={predictionStr || '—'} 
+                                size="small" 
+                                variant="outlined"
+                              />
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  fontWeight: 700, 
+                                  color: color,
+                                  minWidth: 28,
+                                }}
+                              >
+                                {label}
+                              </Typography>
+                            </Box>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
