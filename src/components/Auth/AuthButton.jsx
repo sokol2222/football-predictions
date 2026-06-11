@@ -1,6 +1,6 @@
 // src/components/Auth/AuthButton.jsx
 import { useState, createContext, useContext } from 'react';
-import { Button, Avatar, Menu, MenuItem, Box, Typography } from '@mui/material';
+import { Button, Avatar, Menu, MenuItem, Box, Typography, Divider } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import AuthModal from './AuthModal';
@@ -27,7 +27,7 @@ export const AuthModalProvider = ({ children }) => {
   );
 };
 
-const AuthButton = () => {
+const AuthButton = ({ onNavigate }) => {
   const { user } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
   const { showAuthModal } = useAuthModal();
@@ -37,6 +37,13 @@ const AuthButton = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    handleClose();
+  };
+
+  const handleNavigate = (page) => {
+    if (onNavigate) {
+      onNavigate(page);
+    }
     handleClose();
   };
 
@@ -54,7 +61,7 @@ const AuthButton = () => {
   }
 
   const initials = user.email?.charAt(0).toUpperCase() || '?';
-  const userName = user.email?.split('@')[0] || 'Пользователь';
+  const userName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Пользователь';
 
   return (
     <Box sx={{ position: 'fixed', top: 16, right: 16, zIndex: 1300 }}>
@@ -66,10 +73,23 @@ const AuthButton = () => {
           {userName}
         </Typography>
       </Button>
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
-        <MenuItem onClick={handleClose}>Мой профиль</MenuItem>
-        <MenuItem onClick={handleClose}>Мои прогнозы</MenuItem>
-        <MenuItem onClick={handleLogout}>Выйти</MenuItem>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleClose}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        <MenuItem onClick={() => handleNavigate('profile')}>
+          👤 Мой профиль
+        </MenuItem>
+        <MenuItem onClick={() => handleNavigate('my-predictions')}>
+          📝 Мои прогнозы
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+          🚪 Выйти
+        </MenuItem>
       </Menu>
     </Box>
   );

@@ -60,7 +60,7 @@ function App() {
       <CssBaseline />
       <AuthProvider>
         <AuthModalProvider>
-        <AuthButton />
+        <AuthButton onNavigate={setCurrentPage}/>
         <Layout currentPage={currentPage} onPageChange={setCurrentPage}>
           {renderPage()}
         </Layout>
