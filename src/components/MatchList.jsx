@@ -123,6 +123,7 @@ const MatchList = ({ onNavigate }) => {
 
   const getTimeLeft = (matchDate) => {
     const now = new Date();
+    now.setHours(now.getHours() + 3);
     const diff = matchDate - now;
     if (diff <= 0) return 'Сейчас идёт';
     const hours = Math.floor(diff / (1000 * 60 * 60));
