@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../../lib/supabase';
 import {
   MaterialReactTable,
   useMaterialReactTable,
@@ -106,16 +107,33 @@ const StageStats = () => {
         
         const predictionsMap = {};
         for (const participant of participantsData) {
-          const { data: userPredictions } = await getUserPredictionsForTournament(
-            participant.user_id,
-            tournamentData.id
-          );
+          let userPredictions = [];
+          
+          // Получаем прогнозы в зависимости от типа участника
+          if (participant.user_id) {
+            const { data } = await getUserPredictionsForTournament(participant.user_id, tournamentData.id);
+            userPredictions = data || [];
+          } else if (participant.display_name) {
+            // Для виртуальных участников — прямой запрос по friend_name
+            const { data, error } = await supabase
+              .from('predictions')
+              .select('*')
+              .eq('friend_name', participant.display_name)
+              .eq('tournament_id', tournamentData.id);
+            
+            if (!error) {
+              userPredictions = data || [];
+            }
+          }
           
           const userPredictionsMap = {};
           userPredictions?.forEach(p => {
             userPredictionsMap[p.match_id] = p;
           });
-          predictionsMap[participant.user_id] = userPredictionsMap;
+          
+          // Ключ: user_id или display_name
+          const key = participant.user_id || participant.display_name;
+          predictionsMap[key] = userPredictionsMap;
         }
         setAllPredictions(predictionsMap);
         
@@ -159,11 +177,15 @@ const StageStats = () => {
     let predictionsCount = 0;
     let finishedMatches = 0;
     
+    // Определяем ключ для поиска прогнозов
+    const predictionKey = participant.user_id || participant.display_name;
+    
     for (const match of matchesList) {
       if (match.is_finished && match.actual_home_score !== null) {
         finishedMatches++;
         
-        const prediction = predictionsMap[participant.user_id]?.[match.id];
+        // Используем правильный ключ
+        const prediction = predictionsMap[predictionKey]?.[match.id];
         if (prediction) {
           predictionsCount++;
           const actualResult = {
@@ -307,7 +329,7 @@ const StageStats = () => {
   enableColumnFilters: true,
   enableGlobalFilter: true,
   initialState: {
-    pagination: { pageSize: 10 },
+    pagination: { pageSize: 15 },
     sorting: [{ id: 'totalPoints', desc: true }],
     density: 'compact',  // 👈 Компактный режим
   },
