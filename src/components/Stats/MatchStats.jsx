@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../../lib/supabase';
 import {
   Box,
   Typography,
@@ -31,7 +32,9 @@ import {
   PlayArrow as LiveIcon,
   EmojiEvents as FinishedIcon,
 } from '@mui/icons-material';
-import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament, isRoundOpen } from '../../services/api';
+import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament, isRoundOpen,
+  getPredictionsByFriendName, getParticipantPredictions
+ } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
 
 // Функция для получения очков по прогнозу
@@ -183,18 +186,18 @@ const MatchStats = () => {
         const { data: participantsData } = await getTournamentParticipants(tournamentData.id);
         setParticipants(participantsData || []);
         
+        // Загружаем прогнозы для каждого участника (универсальная функция)
         const predictionsMap = {};
         for (const participant of participantsData) {
-          const { data: userPredictions } = await getUserPredictionsForTournament(
-            participant.user_id,
-            tournamentData.id
-          );
+          const { data: userPredictions } = await getParticipantPredictions(participant, tournamentData.id);
           
           const userPredictionsMap = {};
           userPredictions?.forEach(p => {
             userPredictionsMap[p.match_id] = p;
           });
-          predictionsMap[participant.user_id] = userPredictionsMap;
+          
+          const key = participant.user_id || participant.display_name;
+          predictionsMap[key] = userPredictionsMap;
         }
         setAllPredictions(predictionsMap);
         
@@ -216,10 +219,13 @@ const MatchStats = () => {
     return false;
   };
 
-  const getPredictionForMatch = (userId, matchId, match) => {
-    if (!canShowPredictions(match)) return null;
-    return allPredictions[userId]?.[matchId] || null;
-  };
+  const getPredictionForMatch = (userId, matchId, match, participant) => {
+  if (!canShowPredictions(match)) return null;
+  
+  // Если передан participant, используем display_name как ключ
+  const key = userId || (participant?.display_name);
+  return allPredictions[key]?.[matchId] || null;
+};
 
   const filteredMatches = useMemo(() => {
     if (selectedRound === 'all') return matches;
@@ -238,7 +244,7 @@ const MatchStats = () => {
       const matchPredictions = [];
       for (const participant of participants) {
         const prediction = showPredictions 
-          ? getPredictionForMatch(participant.user_id, match.id, match)
+          ? getPredictionForMatch(participant.user_id, match.id, match, participant)
           : null;
         
         matchPredictions.push({
@@ -365,8 +371,8 @@ const MatchStats = () => {
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Матч</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }} align="center">Статус</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }} align="center">Результат</TableCell>
-                  {participants.map(p => (
-                    <TableCell key={p.user_id} sx={{ color: 'white', fontWeight: 700 }} align="center">
+                  {participants.map((p, idx) => (
+                    <TableCell key={p.user_id || `participant-${idx}`} sx={{ color: 'white', fontWeight: 700 }} align="center">
                       {p.display_name}
                     </TableCell>
                   ))}
@@ -527,7 +533,7 @@ const MatchStats = () => {
                   const isHidden = pred.isHidden;
                   
                   return (
-                    <TableRow key={pred.participantId} hover>
+                    <TableRow key={pred.participantId || `cell-${matchData.matchId}-${idx}`} hover>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

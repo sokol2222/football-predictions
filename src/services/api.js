@@ -348,6 +348,39 @@ export const removeTournamentParticipant = async (participantId) => {
   return { success: true };
 };
 
+// ========== ПРОГНОЗЫ ДЛЯ ВИРТУАЛЬНЫХ УЧАСТНИКОВ ==========
+
+// Получить прогнозы по friend_name (для виртуальных участников)
+export const getPredictionsByFriendName = async (friendName, tournamentId) => {
+  if (!friendName) return { data: [] };
+  
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('*')
+    .eq('friend_name', friendName)
+    .eq('tournament_id', tournamentId);
+  
+  if (error) {
+    console.error('Ошибка загрузки прогнозов по friend_name:', error);
+    return { data: [] };
+  }
+  
+  return { data };
+};
+
+// Универсальная функция получения прогнозов участника (по user_id или friend_name)
+export const getParticipantPredictions = async (participant, tournamentId) => {
+  if (!participant) return { data: [] };
+  
+  if (participant.user_id) {
+    return await getUserPredictionsForTournament(participant.user_id, tournamentId);
+  } else if (participant.display_name) {
+    return await getUserPredictionsForTournament(null, tournamentId, participant.display_name);
+  }
+  
+  return { data: [] };
+};
+
 // ========== ПРОГНОЗЫ ПОЛЬЗОВАТЕЛЯ (расширенные) ==========
 
 // Получить прогнозы пользователя на тур
@@ -377,61 +410,62 @@ export const getUserPredictionsByRound = async (userId, tournamentId, roundNumbe
 };
 
 // Получить все прогнозы пользователя на турнир
-export const getUserPredictionsForTournament = async (userId, tournamentId) => {
-  try {    
-    
-    // 1. Сначала получаем все матчи турнира
-    const { data: matches, error: matchesError } = await supabase
-      .from('matches')
-      .select('id, round_number, home_team, away_team, match_date, is_finished, actual_home_score, actual_away_score')
-      .eq('tournament_id', tournamentId);
-    
-    if (matchesError) {
-      console.error('Ошибка загрузки матчей:', matchesError);
-      throw matchesError;
-    }
-    
-    if (!matches || matches.length === 0) {
-      console.log('Нет матчей в турнире');
+// Получить все прогнозы пользователя на турнир
+export const getUserPredictionsForTournament = async (userId, tournamentId, friendName = null) => {
+    try {
+      // 1. Сначала получаем все матчи турнира
+      const { data: matches, error: matchesError } = await supabase
+        .from('matches')
+        .select('id, round_number, home_team, away_team, match_date, is_finished, actual_home_score, actual_away_score')
+        .eq('tournament_id', tournamentId);
+      
+      if (matchesError) throw matchesError;
+      if (!matches || matches.length === 0) return { data: [] };
+      
+      const matchIds = matches.map(m => m.id);
+      
+      // 2. Получаем прогнозы — если userId есть, ищем по user_id, иначе по friend_name
+      let query = supabase
+        .from('predictions')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .in('match_id', matchIds);
+      
+      if (userId) {
+        query = query.eq('user_id', userId);
+      } else if (friendName) {
+        query = query.eq('friend_name', friendName);
+      } else {
+        // Если нет ни userId, ни friendName — возвращаем пустой массив
+        return { data: [] };
+      }
+      
+      const { data: predictions, error: predictionsError } = await query;
+      
+      if (predictionsError) throw predictionsError;
+      
+      // 3. Обогащаем прогнозы информацией о матчах
+      const enrichedPredictions = (predictions || []).map(prediction => {
+        const match = matches.find(m => m.id === prediction.match_id);
+        return {
+          ...prediction,
+          round_number: match?.round_number,
+          home_team: match?.home_team,
+          away_team: match?.away_team,
+          match_date: match?.match_date,
+          is_finished: match?.is_finished,
+          actual_home_score: match?.actual_home_score,
+          actual_away_score: match?.actual_away_score,
+        };
+      });
+      
+      return { data: enrichedPredictions };
+      
+    } catch (error) {
+      console.error('Ошибка в getUserPredictionsForTournament:', error);
       return { data: [] };
     }
-    
-    const matchIds = matches.map(m => m.id);
-    
-    // 2. Получаем прогнозы пользователя
-    const { data: predictions, error: predictionsError } = await supabase
-      .from('predictions')
-      .select('*')
-      .eq('user_id', userId)
-      .in('match_id', matchIds);
-    
-    if (predictionsError) {
-      console.error('Ошибка загрузки прогнозов:', predictionsError);
-      throw predictionsError;
-    }
-    
-    // 3. Обогащаем прогнозы информацией о матчах
-    const enrichedPredictions = (predictions || []).map(prediction => {
-      const match = matches.find(m => m.id === prediction.match_id);
-      return {
-        ...prediction,
-        round_number: match?.round_number,
-        home_team: match?.home_team,
-        away_team: match?.away_team,
-        match_date: match?.match_date,
-        is_finished: match?.is_finished,
-        actual_home_score: match?.actual_home_score,
-        actual_away_score: match?.actual_away_score,
-      };
-    });
-    
-    return { data: enrichedPredictions };
-    
-  } catch (error) {
-    console.error('Ошибка в getUserPredictionsForTournament:', error);
-    return { data: [] };
-  }
-};
+  };
 
 // Получить статистику пользователя по турниру
 export const getUserTournamentStats = async (userId, tournamentId) => {
