@@ -1,5 +1,5 @@
+// src/components/Stats/MatchStats.jsx
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../../lib/supabase';
 import {
   Box,
   Typography,
@@ -32,15 +32,11 @@ import {
   PlayArrow as LiveIcon,
   EmojiEvents as FinishedIcon,
 } from '@mui/icons-material';
-import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament, isRoundOpen,
-  getPredictionsByFriendName, getParticipantPredictions
- } from '../../services/api';
+import { getActiveTournament, getMatches, getTournamentParticipants, getParticipantPredictions, isRoundOpen } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
 
 // Функция для получения очков по прогнозу
-// Функция для получения очков по прогнозу
 const getPredictionPoints = (predictionStr, actualResult) => {
-  // Если нет результата матча — не показываем очки
   if (!actualResult) {
     return { points: null, label: '', color: 'transparent', tooltip: 'Матч не завершён' };
   }
@@ -55,27 +51,14 @@ const getPredictionPoints = (predictionStr, actualResult) => {
   const actualHome = actualResult.home;
   const actualAway = actualResult.away;
   
-  // Точный счёт — 3 очка (зелёный)
   if (homeScore === actualHome && awayScore === actualAway) {
-    return { 
-      points: 3, 
-      label: '+3', 
-      color: '#4caf50', 
-      tooltip: 'Точный счёт! +3 очка'
-    };
+    return { points: 3, label: '+3', color: '#4caf50', tooltip: 'Точный счёт! +3 очка' };
   }
   
-  // Разница голов — 2 очка (оранжевый)
   if ((homeScore - awayScore) === (actualHome - actualAway)) {
-    return { 
-      points: 2, 
-      label: '+2', 
-      color: '#ff9800', 
-      tooltip: 'Угадана разница голов! +2 очка'
-    };
+    return { points: 2, label: '+2', color: '#ff9800', tooltip: 'Угадана разница голов! +2 очка' };
   }
   
-  // Угадан исход — 1 очко (синий)
   const getOutcome = (home, away) => {
     if (home > away) return 'home';
     if (away > home) return 'away';
@@ -83,21 +66,10 @@ const getPredictionPoints = (predictionStr, actualResult) => {
   };
   
   if (getOutcome(homeScore, awayScore) === getOutcome(actualHome, actualAway)) {
-    return { 
-      points: 1, 
-      label: '+1', 
-      color: '#2196f3', 
-      tooltip: 'Угадан исход! +1 очко'
-    };
+    return { points: 1, label: '+1', color: '#2196f3', tooltip: 'Угадан исход! +1 очко' };
   }
   
-  // Не угадал — 0 очков (красный)
-  return { 
-    points: 0, 
-    label: '0', 
-    color: '#f44336', 
-    tooltip: 'Мимо! 0 очков'
-  };
+  return { points: 0, label: '0', color: '#f44336', tooltip: 'Мимо! 0 очков' };
 };
 
 // Компонент статуса матча
@@ -105,13 +77,7 @@ const MatchStatus = ({ match }) => {
   if (match.is_finished) {
     return (
       <Tooltip title="Матч завершён">
-        <Chip 
-          icon={<FinishedIcon />} 
-          label="Завершён" 
-          size="small" 
-          color="success" 
-          sx={{ fontWeight: 600 }}
-        />
+        <Chip icon={<FinishedIcon />} label="Завершён" size="small" color="success" sx={{ fontWeight: 600 }} />
       </Tooltip>
     );
   }
@@ -122,25 +88,14 @@ const MatchStatus = ({ match }) => {
   if (now > matchDateTime) {
     return (
       <Tooltip title="Матч идёт или уже завершился">
-        <Chip 
-          icon={<LiveIcon />} 
-          label="В эфире" 
-          size="small" 
-          color="warning" 
-          sx={{ fontWeight: 600 }}
-        />
+        <Chip icon={<LiveIcon />} label="В эфире" size="small" color="warning" sx={{ fontWeight: 600 }} />
       </Tooltip>
     );
   }
   
   return (
     <Tooltip title={`Матч состоится ${new Date(match.match_date).toLocaleDateString()} в ${match.match_time?.slice(0, 5)}`}>
-      <Chip 
-        icon={<ScheduleIcon />} 
-        label="Запланирован" 
-        size="small" 
-        variant="outlined" 
-      />
+      <Chip icon={<ScheduleIcon />} label="Запланирован" size="small" variant="outlined" />
     </Tooltip>
   );
 };
@@ -186,7 +141,6 @@ const MatchStats = () => {
         const { data: participantsData } = await getTournamentParticipants(tournamentData.id);
         setParticipants(participantsData || []);
         
-        // Загружаем прогнозы для каждого участника (универсальная функция)
         const predictionsMap = {};
         for (const participant of participantsData) {
           const { data: userPredictions } = await getParticipantPredictions(participant, tournamentData.id);
@@ -195,7 +149,6 @@ const MatchStats = () => {
           userPredictions?.forEach(p => {
             userPredictionsMap[p.match_id] = p;
           });
-          
           const key = participant.user_id || participant.display_name;
           predictionsMap[key] = userPredictionsMap;
         }
@@ -219,13 +172,11 @@ const MatchStats = () => {
     return false;
   };
 
-  const getPredictionForMatch = (userId, matchId, match, participant) => {
-  if (!canShowPredictions(match)) return null;
-  
-  // Если передан participant, используем display_name как ключ
-  const key = userId || (participant?.display_name);
-  return allPredictions[key]?.[matchId] || null;
-};
+  const getPredictionForMatch = (participant, matchId, match) => {
+    if (!canShowPredictions(match)) return null;
+    const key = participant.user_id || participant.display_name;
+    return allPredictions[key]?.[matchId] || null;
+  };
 
   const filteredMatches = useMemo(() => {
     if (selectedRound === 'all') return matches;
@@ -244,7 +195,7 @@ const MatchStats = () => {
       const matchPredictions = [];
       for (const participant of participants) {
         const prediction = showPredictions 
-          ? getPredictionForMatch(participant.user_id, match.id, match, participant)
+          ? getPredictionForMatch(participant, match.id, match)
           : null;
         
         matchPredictions.push({
@@ -286,7 +237,7 @@ const MatchStats = () => {
     const predictionsList = [];
     for (const participant of participants) {
       const prediction = showPredictions 
-        ? getPredictionForMatch(participant.user_id, match.id, match)
+        ? getPredictionForMatch(participant, match.id, match)
         : null;
       
       predictionsList.push({
@@ -372,7 +323,7 @@ const MatchStats = () => {
                   <TableCell sx={{ color: 'white', fontWeight: 700 }} align="center">Статус</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }} align="center">Результат</TableCell>
                   {participants.map((p, idx) => (
-                    <TableCell key={p.user_id || `participant-${idx}`} sx={{ color: 'white', fontWeight: 700 }} align="center">
+                    <TableCell key={p.user_id || `header-${idx}`} sx={{ color: 'white', fontWeight: 700 }} align="center">
                       {p.display_name}
                     </TableCell>
                   ))}
@@ -417,7 +368,7 @@ const MatchStats = () => {
                         
                         return (
                           <TableCell 
-                            key={idx} 
+                            key={pred.participantId || `cell-${matchData.matchId}-${idx}`}
                             align="center"
                             sx={{ p: 1 }}
                           >
@@ -452,7 +403,6 @@ const MatchStats = () => {
             </Table>
           </TableContainer>
 
-          {/* Легенда */}
           <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#4caf50' }}>+3</Typography>
@@ -526,21 +476,21 @@ const MatchStats = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {singleMatchData.predictionsList.map((pred, index) => {
+                {singleMatchData.predictionsList?.map((pred, index) => {
                   const actualResult = singleMatchData.actualResult;
                   const predictionStr = pred.prediction;
                   const { label, color, tooltip } = getPredictionPoints(predictionStr, actualResult);
                   const isHidden = pred.isHidden;
                   
                   return (
-                    <TableRow key={pred.participantId || `cell-${matchData.matchId}-${idx}`} hover>
+                    <TableRow key={pred.participantId || `single-${index}`} hover>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                           <Avatar sx={{ width: 32, height: 32, bgcolor: theme.palette.primary.main }}>
-                            {pred.participantName.charAt(0).toUpperCase()}
+                            {pred.participantName?.charAt(0).toUpperCase() || '?'}
                           </Avatar>
-                          <Typography variant="body2">{pred.participantName}</Typography>
+                          <Typography variant="body2">{pred.participantName || '?'}</Typography>
                         </Box>
                       </TableCell>
                       <TableCell align="center">
