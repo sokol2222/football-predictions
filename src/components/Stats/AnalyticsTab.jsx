@@ -35,6 +35,7 @@ import {
 } from 'recharts';
 import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
+import { supabase } from '../../lib/supabase';
 
 const calculatePoints = (prediction, actualResult) => {
   if (!actualResult || actualResult.home === undefined || actualResult.away === undefined) return 0;
@@ -90,18 +91,32 @@ const AnalyticsTab = () => {
       setHasGroupMatches(groupMatches.some(m => m.is_finished));
       setHasPlayoffMatches(playoffMatches.some(m => m.is_finished));
       
-      // Загружаем прогнозы для всех участников
+      // Загружаем прогнозы для всех участников (с поддержкой виртуальных)
       const allPredictions = {};
       for (const participant of participantsData) {
-        const { data: userPredictions } = await getUserPredictionsForTournament(
-          participant.user_id,
-          tournamentData.id
-        );
+        let userPredictions = [];
+        
+        if (participant.user_id) {
+          const { data } = await getUserPredictionsForTournament(participant.user_id, tournamentData.id);
+          userPredictions = data || [];
+        } else if (participant.display_name) {
+          const { data, error } = await supabase
+            .from('predictions')
+            .select('*')
+            .eq('friend_name', participant.display_name)
+            .eq('tournament_id', tournamentData.id);
+          
+          if (!error) {
+            userPredictions = data || [];
+          }
+        }
+        
         const predictionsMap = {};
         userPredictions?.forEach(p => {
           predictionsMap[p.match_id] = p;
         });
-        allPredictions[participant.user_id] = predictionsMap;
+        const key = participant.user_id || participant.display_name;
+        allPredictions[key] = predictionsMap;
       }
       
       // Анализируем групповой этап
@@ -138,18 +153,23 @@ const AnalyticsTab = () => {
     // Рассчитываем накопление очков
     const history = [];
     let cumulativePoints = {};
-    participantsData.forEach(p => { cumulativePoints[p.user_id] = 0; });
+    participantsData.forEach(p => { 
+      const key = p.user_id || p.display_name;
+      cumulativePoints[key] = 0; 
+    });
     
     // Рассчитываем статистику участников
     const statsMap = {};
     participantsData.forEach(p => {
-      statsMap[p.user_id] = { 
+      const key = p.user_id || p.display_name;
+      statsMap[key] = { 
         exactCount: 0, 
         diffCount: 0, 
         resultCount: 0, 
         totalPoints: 0, 
         matchesCount: 0, 
-        pointsByRound: {} 
+        pointsByRound: {},
+        display_name: p.display_name,
       };
     });
     
@@ -163,19 +183,20 @@ const AnalyticsTab = () => {
         };
         
         for (const participant of participantsData) {
-          const prediction = allPredictions[participant.user_id]?.[match.id];
+          const key = participant.user_id || participant.display_name;
+          const prediction = allPredictions[key]?.[match.id];
           if (prediction) {
             const points = calculatePoints(prediction, actualResult);
-            cumulativePoints[participant.user_id] += points;
+            cumulativePoints[key] += points;
             
-            statsMap[participant.user_id].pointsByRound[round] = 
-              (statsMap[participant.user_id].pointsByRound[round] || 0) + points;
+            statsMap[key].pointsByRound[round] = 
+              (statsMap[key].pointsByRound[round] || 0) + points;
             
-            if (points === 3) statsMap[participant.user_id].exactCount++;
-            else if (points === 2) statsMap[participant.user_id].diffCount++;
-            else if (points === 1) statsMap[participant.user_id].resultCount++;
-            statsMap[participant.user_id].totalPoints += points;
-            statsMap[participant.user_id].matchesCount++;
+            if (points === 3) statsMap[key].exactCount++;
+            else if (points === 2) statsMap[key].diffCount++;
+            else if (points === 1) statsMap[key].resultCount++;
+            statsMap[key].totalPoints += points;
+            statsMap[key].matchesCount++;
           }
         }
       }
@@ -186,16 +207,20 @@ const AnalyticsTab = () => {
         round: round
       };
       participantsData.forEach(p => {
-        snapshot[p.display_name] = cumulativePoints[p.user_id];
+        const key = p.user_id || p.display_name;
+        snapshot[p.display_name] = cumulativePoints[key] || 0;
       });
       history.push(snapshot);
     }
     
     // Формируем статистику участников
-    const statsList = participantsData.map(p => ({
-      ...p,
-      ...statsMap[p.user_id],
-    })).sort((a, b) => b.totalPoints - a.totalPoints);
+    const statsList = participantsData.map(p => {
+      const key = p.user_id || p.display_name;
+      return {
+        ...p,
+        ...statsMap[key],
+      };
+    }).sort((a, b) => b.totalPoints - a.totalPoints);
     
     if (stage === 'group') {
       setGroupChartData(history);
@@ -299,7 +324,7 @@ const AnalyticsTab = () => {
               />
               {currentStats.map((p, idx) => (
                 <Line
-                  key={p.user_id}
+                  key={p.user_id || p.display_name}
                   type="monotone"
                   dataKey={p.display_name}
                   stroke={colors[idx % colors.length]}
@@ -330,7 +355,7 @@ const AnalyticsTab = () => {
           </TableHead>
           <TableBody>
             {currentStats.map((p) => (
-              <TableRow key={p.user_id} hover>
+              <TableRow key={p.user_id || p.display_name} hover>
                 <TableCell sx={{ fontWeight: 600 }}>{p.display_name}</TableCell>
                 {currentChartData.map((data, idx) => {
                   const roundPoints = p.pointsByRound?.[data.round] || 0;
@@ -355,7 +380,7 @@ const AnalyticsTab = () => {
       </Typography>
       <Grid container spacing={2}>
         {currentStats.map((p, idx) => (
-          <Grid item xs={12} sm={6} md={4} key={p.user_id}>
+          <Grid item xs={12} sm={6} md={4} key={p.user_id || p.display_name}>
             <Paper sx={{ p: 2, borderRadius: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                 <Avatar sx={{ bgcolor: colors[idx % colors.length] }}>
