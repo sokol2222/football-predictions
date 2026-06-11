@@ -265,7 +265,7 @@ const StageStats = () => {
         header: '🎯 Точных',
         size: 100,
         Cell: ({ cell }) => (
-          <Chip label={cell.getValue() || 0} size="small" color="success" variant="outlined" />
+          <Chip label={cell.getValue() || 0} size="small" color="success" variant="primary" />
         ),
       },
       {
@@ -273,7 +273,7 @@ const StageStats = () => {
         header: '📊 Разница',
         size: 100,
         Cell: ({ cell }) => (
-          <Chip label={cell.getValue() || 0} size="small" color="warning" variant="outlined" />
+          <Chip label={cell.getValue() || 0} size="small" color="warning" variant="secondary" />
         ),
       },
       {
@@ -281,7 +281,7 @@ const StageStats = () => {
         header: '✅ Исход',
         size: 100,
         Cell: ({ cell }) => (
-          <Chip label={cell.getValue() || 0} size="small" color="info" variant="outlined" />
+          <Chip label={cell.getValue() || 0} size="small" color="info" variant="secondary" />
         ),
       },
       {
@@ -519,11 +519,20 @@ const StageStats = () => {
       {/* Аналитика */}
       {activeStage === 'analytics' && <AnalyticsTab />}      
 
-      {/* Легенда */}
-      <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <Chip icon={<ExactIcon />} label="Точный счёт — 3 очка" size="small" sx={{ bgcolor: alpha(theme.palette.success.main, 0.1) }} />
-        <Chip icon={<DiffIcon />} label="Разница голов — 2 очка" size="small" sx={{ bgcolor: alpha(theme.palette.warning.main, 0.1) }} />
-        <Chip icon={<ResultIcon />} label="Угадан исход — 1 очко" size="small" sx={{ bgcolor: alpha(theme.palette.info.main, 0.1) }} />
+      {/* Легенда */}      
+      <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: '#4caf50' }}>+3</Typography>
+          <Typography variant="caption">Точный счёт</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: '#ff9800' }}>+2</Typography>
+          <Typography variant="caption">Разница голов</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2196f3' }}>+1</Typography>
+          <Typography variant="caption">Исход</Typography>
+        </Box>                
       </Box>
     </Box>
   );
