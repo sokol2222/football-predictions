@@ -21,7 +21,8 @@ import {
   Flag as FlagIcon,
   FilterList as FilterIcon,
   Scoreboard as ScoreIcon,
-  EmojiEvents as EmojiEventsIcon
+  EmojiEvents as EmojiEventsIcon,
+  CalendarMonth
 } from '@mui/icons-material';
 import { getActiveTournament, getMatches, getRoundsByTournament } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
@@ -268,7 +269,7 @@ const MatchCalendar = () => {
       {/* Заголовок */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
-          📅 Календарь матчей
+          <CalendarMonth/> Календарь матчей
         </Typography>
         <Typography variant="body1" color="text.secondary">
           {tournament?.name} {tournament?.year}

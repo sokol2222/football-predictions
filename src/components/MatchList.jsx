@@ -21,6 +21,7 @@ import LooksTwoIcon from '@mui/icons-material/LooksTwo';
 import Looks3Icon from '@mui/icons-material/Looks3';
 import InfoIcon from '@mui/icons-material/Info';
 import StarIcon from '@mui/icons-material/Star';
+import StadiumIcon from '@mui/icons-material/Stadium';
 import { useAuth } from '../contexts/AuthContext';
 import { useAuthModal } from './Auth/AuthButton';
 import { getStageLabel } from '../utils/stageUtils';
@@ -306,7 +307,7 @@ const MatchList = ({ onNavigate }) => {
 
       {/* Ближайшие матчи */}
       <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-        🗓️ Ближайшие матчи
+        <CalendarMonthIcon/> Ближайшие матчи
       </Typography>
       
       {upcomingMatches.length === 0 ? (
@@ -346,7 +347,7 @@ const MatchList = ({ onNavigate }) => {
                       {match.home_team} <span style={{ color: theme.palette.text.secondary }}>—</span> {match.away_team}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block" noWrap sx={{ mb: 2 }}>
-                      🏟️ {match.stadium}
+                      <StadiumIcon/> {match.stadium} ({match.country})
                     </Typography>
                     <Button
                       variant="contained"
