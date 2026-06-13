@@ -14,12 +14,18 @@ import ScoreboardIcon from '@mui/icons-material/Scoreboard';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import MilitaryTechIcon from '@mui/icons-material/MilitaryTech';
+import SportsScoreIcon from '@mui/icons-material/SportsScore';
+import LooksOneIcon from '@mui/icons-material/LooksOne';
+import LooksTwoIcon from '@mui/icons-material/LooksTwo';
+import Looks3Icon from '@mui/icons-material/Looks3';
 import InfoIcon from '@mui/icons-material/Info';
 import StarIcon from '@mui/icons-material/Star';
 import { useAuth } from '../contexts/AuthContext';
 import { useAuthModal } from './Auth/AuthButton';
 import { getStageLabel } from '../utils/stageUtils';
 import TournamentInfo from './Info/TournamentInfo';
+import { supabase } from '../lib/supabase';
 
 const MatchList = ({ onNavigate }) => {
   const theme = useTheme();
@@ -81,12 +87,26 @@ const MatchList = ({ onNavigate }) => {
         const { data: participantsData } = await getTournamentParticipants(tournamentData.id);
         setParticipants(participantsData || []);
         
-        // Рассчитываем очки участников
+        // Рассчитываем очки участников (с поддержкой виртуальных)
         const participantsWithPoints = await Promise.all(
           participantsData.map(async (p) => {
-            const { data: predictions } = await getUserPredictionsForTournament(
-              p.user_id, tournamentData.id
-            );
+            let predictions = [];
+            
+            if (p.user_id) {
+              const { data } = await getUserPredictionsForTournament(p.user_id, tournamentData.id);
+              predictions = data || [];
+            } else if (p.display_name) {
+              const { data, error } = await supabase
+                .from('predictions')
+                .select('*')
+                .eq('friend_name', p.display_name)
+                .eq('tournament_id', tournamentData.id);
+              
+              if (!error) {
+                predictions = data || [];
+              }
+            }
+            
             const totalPoints = predictions?.reduce((sum, pred) => sum + (pred.points_earned || 0), 0) || 0;
             return { ...p, totalPoints };
           })
@@ -148,17 +168,20 @@ const MatchList = ({ onNavigate }) => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Приветствие */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          {user ? `Привет, ${user.email?.split('@')[0]}! 👋` : 'Добро пожаловать! 🏆'}
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Делай прогнозы на матчи {tournament?.name} {tournament?.year}
-        </Typography>
-         <Button
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            {user ? `Привет, ${user.email?.split('@')[0]}! 👋` : 'Добро пожаловать! 🏆'}
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Делай прогнозы на матчи {tournament?.name} {tournament?.year}
+          </Typography>
+        </Box>
+        <Button
           variant="outlined"
           startIcon={<InfoIcon />}
           onClick={() => setInfoOpen(true)}
+          sx={{ borderRadius: 2 }}
         >
           О турнире
         </Button>
@@ -202,32 +225,46 @@ const MatchList = ({ onNavigate }) => {
         🏆 Топ участников
       </Typography>
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        {leaders.map((leader, idx) => (
-          <Grid item xs={12} sm={4} key={leader.user_id}>
-            <Card sx={{ 
-              textAlign: 'center', 
-              p: 2, 
-              bgcolor: alpha(
-                idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32', 
-                0.1
-              ),
-              borderRadius: 3
-            }}>
-              <Avatar sx={{ 
-                width: 56, height: 56, mx: 'auto', mb: 1,
-                bgcolor: idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32',
-                fontSize: 28, fontWeight: 700, color: '#333'
-              }}>
-                {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-              </Avatar>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>{leader.display_name}</Typography>
-              <Typography variant="h4" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                {leader.totalPoints}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">очков</Typography>
-            </Card>
+        {leaders.length === 0 ? (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <Typography color="text.secondary">Нет данных о лидерах</Typography>
+            </Paper>
           </Grid>
-        ))}
+        ) : (
+          leaders.map((leader, idx) => (
+            <Grid item xs={12} sm={4} key={leader.user_id || leader.display_name}>
+              <Card sx={{ 
+                textAlign: 'center', 
+                p: 2, 
+                bgcolor: alpha(
+                  idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32', 
+                  0.1
+                ),
+                borderRadius: 3
+              }}>
+                <Avatar sx={{ 
+                  width: 56, height: 56, mx: 'auto', mb: 1,
+                  bgcolor: idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32',
+                  fontSize: 28, fontWeight: 700, color: '#333'
+                }}>
+                  {idx === 0 ? (
+                    <EmojiEventsIcon  sx={{ fontSize: 32, color: '#333' }} />
+                  ) : idx === 1 ? (
+                    <LooksTwoIcon sx={{ fontSize: 32, color: '#333' }} />
+                  ) : (
+                    <Looks3Icon sx={{ fontSize: 32, color: '#333' }} />
+                  )}
+                </Avatar>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>{leader.display_name}</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                  {leader.totalPoints}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">очков</Typography>
+              </Card>
+            </Grid>
+          ))
+        )}
       </Grid>
 
       {/* Прогресс пользователя */}
@@ -346,7 +383,7 @@ const MatchList = ({ onNavigate }) => {
         <Button
           variant="outlined"
           startIcon={<EmojiEventsIcon />}
-          onClick={() => handleNavigate('stats')}
+          onClick={() => handleNavigate('stage-stats')}
         >
           Статистика
         </Button>       
