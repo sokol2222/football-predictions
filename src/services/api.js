@@ -150,7 +150,9 @@ export const getMatches = async (tournamentId = null) => {
     query = query.eq('tournament_id', tournamentId);
   }
   
-  const { data, error } = await query.order('match_date', { ascending: true });
+  const { data, error } = await query
+      .order('match_date', { ascending: true })
+      .order('match_time', { ascending: true });;
   
   if (error) throw error;
   return { data };
@@ -167,7 +169,9 @@ export const getMatchesByStageAndRound = async (stageId, roundNumber = null) => 
     query = query.eq('round_number', roundNumber);
   }
   
-  const { data, error } = await query.order('match_date', { ascending: true });
+  const { data, error } = await query
+    .order('match_date', { ascending: true })
+    .order('match_time', { ascending: true });
   
   if (error) throw error;
   return { data };
