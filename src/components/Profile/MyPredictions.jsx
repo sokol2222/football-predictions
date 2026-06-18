@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+// src/components/Profile/MyPredictions.jsx
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -14,10 +15,6 @@ import {
   Chip,
   Alert,
   Snackbar,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Card,
   CardContent,
   Grid,
@@ -48,10 +45,18 @@ import {
 } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
 
+// ============================================================
+// КЛЮЧ ДЛЯ SESSIONSTORAGE
+// ============================================================
+const getStorageKey = (userId, roundNumber) => {
+  return `draft_predictions_${userId || 'anonymous'}_round_${roundNumber || 'none'}`;
+};
+
 const MyPredictions = () => {
   const theme = useTheme();
   const { user } = useAuth();
   const { showAuthModal } = useAuthModal();
+  
   const [tournament, setTournament] = useState(null);
   const [rounds, setRounds] = useState([]);
   const [selectedRound, setSelectedRound] = useState(null);
@@ -62,24 +67,24 @@ const MyPredictions = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
 
-  // Загружаем турнир и туры
-  useEffect(() => {
-    if (user) {
-      loadTournamentAndRounds();
-    } else {
+  // ============================================================
+  // 📢 showSnackbar — ПЕРВЫМ ДЕЛОМ (до всех useCallback)
+  // ============================================================
+  const showSnackbar = useCallback((message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  }, []);
+
+  // ============================================================
+  // 🎯 ЗАГРУЗКА ТУРНИРА И ТУРОВ
+  // ============================================================
+  const loadTournamentAndRounds = useCallback(async () => {
+    if (!user) {
       setLoading(false);
+      return;
     }
-  }, [user]);
 
-  // Загружаем матчи и прогнозы при смене тура
-  useEffect(() => {
-    if (user && tournament && selectedRound) {
-      loadMatchesAndPredictions();
-    }
-  }, [user, tournament, selectedRound]);
-
-  const loadTournamentAndRounds = async () => {
     try {
       setLoading(true);
       
@@ -92,7 +97,8 @@ const MyPredictions = () => {
         
         const openRound = roundsData.find(r => r.is_open);
         const firstRound = roundsData[0];
-        setSelectedRound(openRound?.round_number || firstRound?.round_number || null);
+        const initialRound = openRound?.round_number || firstRound?.round_number || null;
+        setSelectedRound(initialRound);
       }
     } catch (error) {
       showSnackbar('Ошибка загрузки турнира', 'error');
@@ -100,10 +106,16 @@ const MyPredictions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const loadMatchesAndPredictions = async () => {
-    if (!tournament || !selectedRound) return;
+  // ============================================================
+  // 📥 ЗАГРУЗКА МАТЧЕЙ И ПРОГНОЗОВ С ВОССТАНОВЛЕНИЕМ ЧЕРНОВИКОВ
+  // ============================================================
+  // ============================================================
+// 📥 ЗАГРУЗКА МАТЧЕЙ И ПРОГНОЗОВ (ОБНОВЛЁННАЯ)
+// ============================================================
+const loadMatchesAndPredictions = useCallback(async () => {
+    if (!tournament || !selectedRound || !user) return;
     
     try {
       setLoading(true);
@@ -114,22 +126,53 @@ const MyPredictions = () => {
       const status = await isRoundOpen(tournament.id, selectedRound);
       setRoundStatus(status);
       
-      if (user?.id) {
-        const { data: predictionsData } = await getUserPredictionsByRound(user.id, tournament.id, selectedRound);
-        setPredictions(predictionsData);
-        
-        const initialPending = {};
-        matchesData?.forEach(match => {
-          const existing = predictionsData[match.id];
-          if (existing) {
-            initialPending[match.id] = {
-              homeScore: existing.home_score,
-              awayScore: existing.away_score,
-            };
-          }
-        });
-        setPendingPredictions(initialPending);
+      // Загружаем сохранённые прогнозы из БД
+      const { data: predictionsData } = await getUserPredictionsByRound(user.id, tournament.id, selectedRound);
+      setPredictions(predictionsData);
+      
+      // 🔑 Проверяем наличие черновика в sessionStorage
+      const storageKey = getStorageKey(user.id, selectedRound);
+      const savedDraft = sessionStorage.getItem(storageKey);
+      let savedPredictions = {};
+      let hasDraft = false;
+      
+      if (savedDraft) {
+        try {
+          savedPredictions = JSON.parse(savedDraft);
+          // ✅ Проверяем, что черновик содержит реальные данные (не пустой объект)
+          hasDraft = Object.keys(savedPredictions).length > 0 && 
+                    Object.values(savedPredictions).some(p => 
+                      p.homeScore !== undefined && p.homeScore !== '' && 
+                      p.awayScore !== undefined && p.awayScore !== ''
+                    );
+          setIsDraftRestored(hasDraft);
+        } catch (e) {
+          console.warn('Ошибка парсинга черновиков:', e);
+          setIsDraftRestored(false);
+        }
+      } else {
+        setIsDraftRestored(false);
       }
+
+      // Формируем начальное состояние для pendingPredictions
+      const initialPending = {};
+      matchesData?.forEach(match => {
+        const matchId = match.id;
+        
+        // Если есть черновик — используем его (приоритет)
+        if (hasDraft && savedPredictions[matchId] !== undefined && savedPredictions[matchId] !== null) {
+          initialPending[matchId] = savedPredictions[matchId];
+        }
+        // Иначе если есть сохранённый прогноз — используем его
+        else if (predictionsData[matchId]) {
+          initialPending[matchId] = {
+            homeScore: predictionsData[matchId].home_score,
+            awayScore: predictionsData[matchId].away_score,
+          };
+        }
+      });
+      
+      setPendingPredictions(initialPending);
       
     } catch (error) {
       showSnackbar('Ошибка загрузки матчей', 'error');
@@ -137,38 +180,162 @@ const MyPredictions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [tournament, selectedRound, user, getStorageKey, showSnackbar]);
 
-  const showSnackbar = (message, severity = 'success') => {
-    setSnackbar({ open: true, message, severity });
-  };
+  // ============================================================
+  // 🔄 ЗАГРУЗКА ПРИ ИЗМЕНЕНИИ ЗАВИСИМОСТЕЙ
+  // ============================================================
+  useEffect(() => {
+    if (user) {
+      loadTournamentAndRounds();
+    } else {
+      setLoading(false);
+    }
+  }, [user, loadTournamentAndRounds]);
 
-  const handlePredictionChange = (matchId, type, value) => {
-    if (!roundStatus.is_open) return;
+  useEffect(() => {
+    if (user && tournament && selectedRound) {
+      loadMatchesAndPredictions();
+    }
+  }, [user, tournament, selectedRound, loadMatchesAndPredictions]);
+
+  // ============================================================
+  // 💾 АВТОСОХРАНЕНИЕ ЧЕРНОВИКОВ В sessionStorage
+  // ============================================================
+  useEffect(() => {
+    if (user && selectedRound) {
+      const storageKey = getStorageKey(user.id, selectedRound);
+      
+      // Проверяем, есть ли реальные данные в pendingPredictions
+      const hasRealData = Object.values(pendingPredictions).some(p => 
+        p.homeScore !== undefined && p.homeScore !== '' && 
+        p.awayScore !== undefined && p.awayScore !== ''
+      );
+      
+      if (hasRealData) {
+        // Сохраняем в sessionStorage
+        sessionStorage.setItem(storageKey, JSON.stringify(pendingPredictions));
+        
+        // Проверяем, отличается ли черновик от сохранённых прогнозов
+        let hasChanges = false;
+        for (const [matchId, pending] of Object.entries(pendingPredictions)) {
+          const saved = predictions[matchId];
+          if (saved) {
+            if (pending.homeScore !== saved.home_score || pending.awayScore !== saved.away_score) {
+              hasChanges = true;
+              break;
+            }
+          } else {
+            // Если прогноз не сохранён, но есть данные — это тоже изменение
+            if (pending.homeScore !== undefined && pending.homeScore !== '' && 
+                pending.awayScore !== undefined && pending.awayScore !== '') {
+              hasChanges = true;
+              break;
+            }
+          }
+        }
+        
+        // Устанавливаем флаг черновика, только если есть изменения
+        setIsDraftRestored(hasChanges);
+      } else {
+        // Если нет данных — удаляем черновик
+        sessionStorage.removeItem(storageKey);
+        setIsDraftRestored(false);
+      }
+    }
+  }, [pendingPredictions, user, selectedRound, getStorageKey, predictions]);
+
+  // ============================================================
+  // 🗑️ ОЧИСТКА ЧЕРНОВИКОВ
+  // ============================================================
+  const clearDraft = useCallback(() => {
+    if (user && selectedRound) {
+      // 1. Удаляем из sessionStorage
+      const storageKey = getStorageKey(user.id, selectedRound);
+      sessionStorage.removeItem(storageKey);
+      
+      // 2. ✅ Сбрасываем флаг черновика
+      setIsDraftRestored(false);
+      
+      // 3. Сбрасываем pendingPredictions до состояния из БД
+      const resetPending = {};
+      matches.forEach(match => {
+        const existing = predictions[match.id];
+        if (existing) {
+          resetPending[match.id] = {
+            homeScore: existing.home_score,
+            awayScore: existing.away_score,
+          };
+        }
+      });
+      setPendingPredictions(resetPending);
+      
+      showSnackbar('🗑️ Черновик очищен', 'info');
+    }
+  }, [user, selectedRound, matches, predictions, getStorageKey, showSnackbar]);
+
+  // ============================================================
+// ✅ ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: если прогнозы сохранены — убираем черновик
+// ============================================================
+useEffect(() => {
+  if (user && selectedRound && isDraftRestored) {
+    const storageKey = getStorageKey(user.id, selectedRound);
+    const savedDraft = sessionStorage.getItem(storageKey);
     
-    setPendingPredictions(prev => ({
-      ...prev,
-      [matchId]: {
-        ...prev[matchId],
-        [type]: value === '' ? '' : Number(value),
-      },
-    }));
-  };
+    if (savedDraft) {
+      try {
+        const draftData = JSON.parse(savedDraft);
+        let hasChanges = false;
+        
+        // Проверяем, есть ли различия между черновиком и сохранёнными прогнозами
+        for (const [matchId, draft] of Object.entries(draftData)) {
+          const saved = predictions[matchId];
+          if (saved) {
+            if (draft.homeScore !== saved.home_score || draft.awayScore !== saved.away_score) {
+              hasChanges = true;
+              break;
+            }
+          } else {
+            // Если прогноз не сохранён, но есть данные
+            if (draft.homeScore !== undefined && draft.homeScore !== '' && 
+                draft.awayScore !== undefined && draft.awayScore !== '') {
+              hasChanges = true;
+              break;
+            }
+          }
+        }
+        
+        // Если изменений нет — удаляем черновик
+        if (!hasChanges) {
+          sessionStorage.removeItem(storageKey);
+          setIsDraftRestored(false);
+        }
+      } catch (e) {
+        console.warn('Ошибка проверки черновика:', e);
+      }
+    }
+  }
+}, [predictions, user, selectedRound, isDraftRestored, getStorageKey]);
 
-  const handleSaveRound = async () => {
+  // ============================================================
+  // 💾 СОХРАНЕНИЕ ПРОГНОЗОВ В БД
+  // ============================================================
+  const handleSaveRound = useCallback(async () => {
     if (!roundStatus.is_open) {
-      showSnackbar('Невозможно сохранить: дедлайн прошёл', 'error');
+      showSnackbar('❌ Невозможно сохранить: дедлайн прошёл', 'error');
       return;
     }
     
     setSaving(true);
     let successCount = 0;
     let errorCount = 0;
+    const savedMatchIds = [];
 
     for (const [matchId, pending] of Object.entries(pendingPredictions)) {
       const match = matches.find(m => m.id === Number(matchId));
       if (!match) continue;
       
+      // Пропускаем пустые прогнозы
       if (pending.homeScore === undefined || pending.awayScore === undefined || 
           pending.homeScore === '' || pending.awayScore === '') {
         continue;
@@ -192,34 +359,85 @@ const MyPredictions = () => {
           });
         }
         successCount++;
+        savedMatchIds.push(matchId);
       } catch (error) {
         errorCount++;
         console.error('Ошибка сохранения:', error);
       }
     }
     
+    // ✅ Очищаем черновики после успешного сохранения
     if (successCount > 0) {
-      showSnackbar(`✅ Сохранено ${successCount} прогнозов`, errorCount > 0 ? 'warning' : 'success');
+      clearDraft();
+      
+      // Удаляем сохранённые прогнозы из pending (чтобы они не дублировались)
+      setPendingPredictions(prev => {
+        const newPending = { ...prev };
+        savedMatchIds.forEach(id => {
+          delete newPending[id];
+        });
+        return newPending;
+      });
+      
+      showSnackbar(
+        `✅ Сохранено ${successCount} прогнозов${errorCount > 0 ? `, ошибок: ${errorCount}` : ''}`, 
+        errorCount > 0 ? 'warning' : 'success'
+      );
+      
+      // Перезагружаем данные
       await loadMatchesAndPredictions();
     } else if (errorCount > 0) {
       showSnackbar(`❌ Ошибка при сохранении ${errorCount} прогнозов`, 'error');
+    } else {
+      showSnackbar('⚠️ Нет заполненных прогнозов для сохранения', 'warning');
     }
     
     setSaving(false);
-  };
+  }, [pendingPredictions, predictions, matches, tournament, roundStatus.is_open, loadMatchesAndPredictions, clearDraft]);
 
-  const formatDate = (dateStr) => {
+  // ============================================================
+  // 🎛️ ОБРАБОТЧИКИ ИЗМЕНЕНИЙ
+  // ============================================================
+  const handlePredictionChange = useCallback((matchId, type, value) => {
+    if (!roundStatus.is_open) return;
+    
+    setPendingPredictions(prev => ({
+      ...prev,
+      [matchId]: {
+        ...prev[matchId],
+        [type]: value === '' ? '' : Number(value),
+      },
+    }));
+  }, [roundStatus.is_open]);
+
+  // ============================================================
+  // 🔄 ОБРАБОТКА СМЕНЫ ТУРА
+  // ============================================================
+  const handleRoundChange = useCallback((newRound) => {
+    // Сохраняем черновики перед переключением
+    if (user && selectedRound && Object.keys(pendingPredictions).length > 0) {
+      const storageKey = getStorageKey(user.id, selectedRound);
+      sessionStorage.setItem(storageKey, JSON.stringify(pendingPredictions));
+    }
+    setSelectedRound(newRound);
+  }, [user, selectedRound, pendingPredictions]);
+
+  // ============================================================
+  // 📊 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+  // ============================================================
+
+  const formatDate = useCallback((dateStr) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'numeric' });
-  };
+  }, []);
 
-  const formatTime = (timeStr) => {
+  const formatTime = useCallback((timeStr) => {
     if (!timeStr) return '';
     return timeStr.slice(0, 5);
-  };
+  }, []);
 
-  const formatDeadline = (deadline) => {
+  const formatDeadline = useCallback((deadline) => {
     if (!deadline) return '';
     const date = new Date(deadline);
     return date.toLocaleString('ru-RU', {
@@ -228,14 +446,20 @@ const MyPredictions = () => {
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
+  }, []);
 
-  const filledCount = Object.values(pendingPredictions).filter(p => 
-    p.homeScore !== undefined && p.homeScore !== '' && 
-    p.awayScore !== undefined && p.awayScore !== ''
-  ).length;
+  const filledCount = useMemo(() => {
+    return Object.values(pendingPredictions).filter(p => 
+      p.homeScore !== undefined && p.homeScore !== '' && 
+      p.awayScore !== undefined && p.awayScore !== ''
+    ).length;
+  }, [pendingPredictions]);
 
   const totalMatches = matches.length;
+
+  // ============================================================
+  // 🖼️ РЕНДЕР
+  // ============================================================
 
   // Если пользователь не авторизован
   if (!user) {
@@ -294,24 +518,35 @@ const MyPredictions = () => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs
           value={selectedRound}
-          onChange={(e, newValue) => setSelectedRound(newValue)}
+          onChange={(e, newValue) => handleRoundChange(newValue)}
           variant="scrollable"
           scrollButtons="auto"
         >
-          {rounds.map(round => (
-            <Tab
-              key={round.round_number}
-              value={round.round_number}
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <span>{getStageLabel(round.round_number)}</span>
-                  {!round.is_open && round.deadline && (
-                    <LockIcon fontSize="small" color="disabled" />
-                  )}
-                </Box>
-              }
-            />
-          ))}
+          {rounds.map(round => {
+            //const hasDraft = user && sessionStorage.getItem(getStorageKey(user.id, round.round_number));
+            return (
+              <Tab
+                key={round.round_number}
+                value={round.round_number}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <span>{getStageLabel(round.round_number)}</span>
+                    {!round.is_open && round.deadline && (
+                      <LockIcon fontSize="small" color="disabled" />
+                    )}
+                    {/*{hasDraft && (
+                      <Chip 
+                        label="*" 
+                        size="small" 
+                        color="warning" 
+                        sx={{ width: 20, height: 20, '& .MuiChip-label': { px: 0, fontSize: 12 } }}
+                      />
+                    )}*/}
+                  </Box>
+                }
+              />
+            );
+          })}
         </Tabs>
       </Box>
 
@@ -331,6 +566,20 @@ const MyPredictions = () => {
             size="small"
             color="primary"
             sx={{ ml: 2 }}
+          />
+        )}
+        {isDraftRestored && (
+          <Chip 
+            label="📝 Есть черновик"
+            size="small"
+            color="warning"
+            sx={{ ml: 2 }}
+            onClick={() => {
+              const storageKey = getStorageKey(user.id, selectedRound);
+              sessionStorage.removeItem(storageKey);
+              setIsDraftRestored(false);
+              loadMatchesAndPredictions();
+            }}
           />
         )}
       </Alert>
@@ -364,6 +613,11 @@ const MyPredictions = () => {
               {matches.map((match) => {
                 const pending = pendingPredictions[match.id] || {};
                 const isDisabled = !roundStatus.is_open;
+                const isSaved = predictions[match.id] !== undefined;
+                const isModified = isSaved && (
+                  pending.homeScore !== predictions[match.id].home_score ||
+                  pending.awayScore !== predictions[match.id].away_score
+                );
                 
                 return (
                   <TableRow key={match.id} hover>
@@ -384,6 +638,14 @@ const MyPredictions = () => {
                           ({match.home_team_code} - {match.away_team_code})
                         </Typography>
                       )}
+                      {isSaved && (
+                        <Chip 
+                          label={isModified ? '✏️ Изменён' : '✅ Сохранён'}
+                          size="small"
+                          color={isModified ? 'warning' : 'success'}
+                          sx={{ ml: 1, height: 20, '& .MuiChip-label': { fontSize: 10, px: 1 } }}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
@@ -397,10 +659,18 @@ const MyPredictions = () => {
                         value={pending.homeScore !== undefined ? pending.homeScore : ''}
                         onChange={(e) => handlePredictionChange(match.id, 'homeScore', e.target.value)}
                         disabled={isDisabled}
-                        inputProps={{ min: 0, max: 20, style: { textAlign: 'center', width: '60px' } }}
+                        inputProps={{ 
+                          min: 0, 
+                          max: 20, 
+                          style: { textAlign: 'center', width: '60px' } 
+                        }}
                         placeholder="—"
                         sx={{
-                          '& input': { fontWeight: 'bold', fontSize: '16px' },
+                          '& input': { 
+                            fontWeight: isModified ? 'bold' : 'normal',
+                            color: isModified ? theme.palette.warning.main : 'inherit',
+                            fontSize: '16px' 
+                          },
                           '& .MuiOutlinedInput-root': { borderRadius: 2 },
                         }}
                       />
@@ -412,10 +682,18 @@ const MyPredictions = () => {
                         value={pending.awayScore !== undefined ? pending.awayScore : ''}
                         onChange={(e) => handlePredictionChange(match.id, 'awayScore', e.target.value)}
                         disabled={isDisabled}
-                        inputProps={{ min: 0, max: 20, style: { textAlign: 'center', width: '60px' } }}
+                        inputProps={{ 
+                          min: 0, 
+                          max: 20, 
+                          style: { textAlign: 'center', width: '60px' } 
+                        }}
                         placeholder="—"
                         sx={{
-                          '& input': { fontWeight: 'bold', fontSize: '16px' },
+                          '& input': { 
+                            fontWeight: isModified ? 'bold' : 'normal',
+                            color: isModified ? theme.palette.warning.main : 'inherit',
+                            fontSize: '16px' 
+                          },
                           '& .MuiOutlinedInput-root': { borderRadius: 2 },
                         }}
                       />
@@ -430,7 +708,17 @@ const MyPredictions = () => {
 
       {/* Кнопка сохранения */}
       {roundStatus.is_open && matches.length > 0 && (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+          {isDraftRestored && (
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={clearDraft}
+              disabled={saving}
+            >
+              🗑️ Очистить черновик
+            </Button>
+          )}
           <Button
             variant="contained"
             color="primary"
@@ -447,7 +735,7 @@ const MyPredictions = () => {
               transition: 'transform 0.2s',
             }}
           >
-            {saving ? 'Сохранение...' : `Сохранить прогнозы тура (${filledCount}/${totalMatches})`}
+            {saving ? 'Сохранение...' : `Сохранить прогнозы (${filledCount}/${totalMatches})`}
           </Button>
         </Box>
       )}
@@ -493,11 +781,14 @@ const MyPredictions = () => {
 
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={3000}
+        autoHideDuration={4000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snackbar.severity}>
+        <Alert 
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>
