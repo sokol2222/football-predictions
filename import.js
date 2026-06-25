@@ -1,6 +1,7 @@
 // scripts/importWorldCup.js
 // Запуск: node scripts/importWorldCup.js
 
+import { playoffMatches } from './import_matches_playoff.js';
 import { supabase } from './src/lib/supabase.node.js';
 
 
@@ -42,6 +43,15 @@ const teamCodes = {
   'Англия': 'ENG', 'Хорватия': 'CRO', 'Гана': 'GHA', 'Панама': 'PAN',
 };
 
+const stageDeadlines = {
+  '1/16 финала': '2026-06-28 20:00:00',
+  '1/8 финала': '2026-07-04 18:00:00',
+  'Четвертьфинал': '2026-07-09 21:00:00',
+  'Полуфинал': '2026-07-14 20:00:00',
+  'Матч за 3-е место': '2026-07-18 22:00:00',
+  'Финал': '2026-07-18 20:00:00',
+};
+
 // ========== МАТЧИ ГРУППОВОГО ЭТАПА (МОСКОВСКОЕ ВРЕМЯ) ==========
 const groupMatches = [
   // 11 июня 2026
@@ -64,6 +74,7 @@ const groupMatches = [
   { match_number: 10, group: 'F', round: 1, home: 'Нидерланды', away: 'Япония', date: '2026-06-14', time: '23:00:00', stadium: 'AT&T Stadium', city: 'Арлингтон', country: 'США' },
   */
   // 15 июня 2026
+  /*
   { match_number: 11, group: 'E', round: 1, home: 'Кот-д\'Ивуар', away: 'Эквадор', date: '2026-06-15', time: '02:00:00', stadium: 'Lincoln Financial Field', city: 'Филадельфия', country: 'США' },
   { match_number: 12, group: 'F', round: 1, home: 'Швеция', away: 'Тунис', date: '2026-06-15', time: '05:00:00', stadium: 'Estadio BBVA', city: 'Гваделупа', country: 'Мексика' },
   { match_number: 13, group: 'H', round: 1, home: 'Испания', away: 'Кабо-Верде', date: '2026-06-15', time: '19:00:00', stadium: 'Mercedes-Benz Stadium', city: 'Атланта', country: 'США' },
@@ -86,13 +97,14 @@ const groupMatches = [
   { match_number: 24, group: 'K', round: 1, home: 'Узбекистан', away: 'Колумбия', date: '2026-06-18', time: '05:00:00', stadium: 'Estadio Azteca', city: 'Мехико', country: 'Мексика' },
   { match_number: 25, group: 'A', round: 2, home: 'Чехия', away: 'ЮАР', date: '2026-06-18', time: '19:00:00', stadium: 'Mercedes-Benz Stadium', city: 'Атланта', country: 'США' },
   { match_number: 26, group: 'B', round: 2, home: 'Швейцария', away: 'Босния и Герцеговина', date: '2026-06-18', time: '22:00:00', stadium: 'SoFi Stadium', city: 'Лос-Анджелес', country: 'США' },
-  
+  */
   // 19 июня 2026
   /*{ match_number: 27, group: 'B', round: 2, home: 'Канада', away: 'Катар', date: '2026-06-19', time: '01:00:00', stadium: 'BC Place', city: 'Ванкувер', country: 'Канада' },
   { match_number: 28, group: 'A', round: 2, home: 'Мексика', away: 'Южная Корея', date: '2026-06-19', time: '04:00:00', stadium: 'Estadio Akron', city: 'Сапопан', country: 'Мексика' },
   { match_number: 29, group: 'D', round: 2, home: 'США', away: 'Австралия', date: '2026-06-19', time: '22:00:00', stadium: 'Lumen Field', city: 'Сиэтл', country: 'США' },
   */
   // 20 июня 2026
+  /*
   { match_number: 30, group: 'C', round: 2, home: 'Шотландия', away: 'Марокко', date: '2026-06-20', time: '01:00:00', stadium: 'Gillette Stadium', city: 'Фоксборо', country: 'США' },
   { match_number: 31, group: 'C', round: 2, home: 'Бразилия', away: 'Гаити', date: '2026-06-20', time: '04:00:00', stadium: 'Lincoln Financial Field', city: 'Филадельфия', country: 'США' },
   { match_number: 32, group: 'D', round: 2, home: 'Турция', away: 'Парагвай', date: '2026-06-20', time: '07:00:00', stadium: "Levi's Stadium", city: 'Санта-Клара', country: 'США' },
@@ -154,12 +166,22 @@ const groupMatches = [
   // 29 июня 2026
   { match_number: 71, group: 'G', round: 3, home: 'Новая Зеландия', away: 'Бельгия', date: '2026-06-29', time: '04:00:00', stadium: 'BC Place', city: 'Ванкувер', country: 'Канада' },
   { match_number: 72, group: 'G', round: 3, home: 'Египет', away: 'Иран', date: '2026-06-29', time: '04:00:00', stadium: 'Lumen Field', city: 'Сиэтл', country: 'США' },
-  
+  */
 ];
 
 // ========== ФУНКЦИЯ ПОЛУЧЕНИЯ КОДА КОМАНДЫ ==========
 const getTeamCode = (teamName) => {
-  return teamCodes[teamName] || teamName.slice(0, 3).toUpperCase();
+  // Если команда не передана или undefined
+  if (!teamName) return 'TBD';
+  
+  // Если есть в словаре — берём оттуда
+  if (teamCodes[teamName]) return teamCodes[teamName];
+  
+  // Если это плей-офф обозначение (1A, 2B, 3C, W73, LSF1 и т.д.)
+  if (teamName.length <= 4) return teamName;
+  
+  // Иначе берём первые 3 буквы
+  return teamName.slice(0, 3).toUpperCase();
 };
 
 // ========== ОСНОВНАЯ ФУНКЦИЯ ИМПОРТА ==========
@@ -208,7 +230,27 @@ async function importWorldCup() {
     return;
   }
 
+   // 3. Получаем ID всех этапов для плей-офф
+  console.log('\n📌 Получаем этапы...');
+  const { data: stages, error: stagesError } = await supabase
+    .from('stages')
+    .select('id, name')
+    .eq('tournament_id', 2);
+
+  if (stagesError) {
+    console.error('❌ Ошибка получения этапов:', stagesError);
+    return;
+  }
+
+  const stageMap = {};
+  stages.forEach(s => {
+    stageMap[s.name] = s.id;
+  });
+
+  console.log(`✅ Найдено этапов: ${Object.keys(stageMap).length}`);
+
   // 4. Импортируем матчи
+  
   console.log('\n📌 Импортируем матчи группового этапа...');
   let matchNumber = 1;
   let importedCount = 0;
@@ -236,11 +278,6 @@ async function importWorldCup() {
       is_finished: false,
     };
 
-    //console.log('matchData', matchData)
-
-    /*const { error } = await supabase.from('matches').upsert(matchData, {
-      onConflict: 'tournament_id, match_number',
-    });*/
 
     const { error } = await supabase.from('matches').insert(matchData);
 
@@ -255,6 +292,96 @@ async function importWorldCup() {
   console.log(`\n🎉 Импорт завершён!`);
   console.log(`📊 Добавлено матчей: ${importedCount}`);
   console.log(`🏟️ Все матчи с реальными стадионами и московским временем`);
+
+
+// 5. Импортируем матчи плей-офф
+console.log('\n📌 Импортируем матчи плей-офф...');
+
+// Сначала импортируем 1/16 финала (явные команды)
+/*
+const round16Matches = playoffMatches.filter(m => m.stage === '1/16 финала');
+
+for (const match of round16Matches) {
+  const matchData = {
+    tournament_id: 2,
+    stage_id: stageMap[match.stage],
+    match_number: match.match_number,
+    round_number: match.round,
+    home_team: match.home_team,
+    away_team: match.away_team,
+    home_team_code: getTeamCode(match.home),
+    away_team_code: getTeamCode(match.away),
+    match_date: match.date,
+    match_time: match.time,
+    round_deadline: stageDeadlines[match.stage],
+    stadium: match.stadium,
+    city: match.city,
+    country: match.country,
+    is_finished: false,
+    is_open: true,
+  };
+  
+  const { error } = await supabase.from('matches').insert(matchData);
+  if (error) {
+    console.error(`❌ Ошибка ${match.match_number}:`, error.message);
+  } else {
+    console.log(`✅ Матч ${match.match_number}: ${match.home_team} vs ${match.away_team}`);
+  }
+}
+*/
+// Затем импортируем матчи с home_match_id и away_match_id (1/8 → финал)
+const linkedMatches = playoffMatches.filter(m => m.home_parent_match || m.away_parent_match);
+
+for (const match of linkedMatches) {
+  // Получаем данные родительских матчей по их номеру
+  const { data: homeParent, error: homeError } = await supabase
+    .from('matches')
+    .select('id, home_team, away_team')
+    .eq('match_number', match.home_parent_match)
+    .maybeSingle();
+    
+  const { data: awayParent, error: awayError } = await supabase
+    .from('matches')
+    .select('id, home_team, away_team')
+    .eq('match_number', match.away_parent_match)
+    .maybeSingle();
+
+  if (!homeParent || !awayParent) {
+    console.warn(`⚠️ Не найдены родительские матчи для ${match.match_number}`);
+    continue;
+  }
+
+  const matchData = {
+    tournament_id: 2,
+    stage_id: stageMap[match.stage],
+    match_number: match.match_number,
+    round_number: match.round,
+    home_team: match.home_parent_match,
+    away_team: match.away_parent_match, 
+    home_team_code: getTeamCode(match.home),
+    away_team_code: getTeamCode(match.away),
+    match_date: match.date,
+    match_time: match.time,
+    round_deadline: stageDeadlines[match.stage],
+    stadium: match.stadium,
+    city: match.city,
+    country: match.country,
+    is_finished: false,
+    is_open: true,
+  };
+  
+  const { error } = await supabase.from('matches').insert(matchData);
+  if (error) {
+    console.error(`❌ Ошибка ${match.match_number}:`, error.message);
+  } else {
+    console.log(`✅ Матч ${match.match_number}: ${homeParent.home_team} vs ${awayParent.away_team} (из матчей ${match.home_parent_match} и ${match.away_parent_match})`);
+  }
+}
+
+  console.log(`\n🎉 Импорт завершён!`);
+  /*console.log(`📊 Добавлено матчей плей-офф: ${playoffImported}`);
+  console.log(`🏟️ Всего матчей: ${72 + playoffImported}`);*/
+
 }
 
 // ЗАПУСК
