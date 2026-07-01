@@ -21,13 +21,11 @@ import {
 } from '@mui/material';
 import {
   EmojiEvents as TrophyIcon,
-  CheckCircle as ExactIcon,
-  TrendingUp as ResultIcon,
-  Difference as DiffIcon,
   Group as GroupIcon,
   EmojiEvents as PlayoffIcon,
   Info as InfoIcon,
   TrendingUp as TrendingUpIcon,
+  Dashboard as DashboardIcon,
 } from '@mui/icons-material';
 import { getActiveTournament, getMatches, getTournamentParticipants, getUserPredictionsForTournament } from '../../services/api';
 import { getStageLabel } from '../../utils/stageUtils';
@@ -38,8 +36,8 @@ const calculatePoints = (prediction, actualResult) => {
     return { points: 0, isExact: false, isExactDiff: false, isCorrectResult: false };
   }
   
-  const homeScore = prediction.homeScore;
-  const awayScore = prediction.awayScore;
+  const homeScore = prediction.homeScore || prediction.home_score || 0;
+  const awayScore = prediction.awayScore || prediction.away_score || 0;
   const actualHome = actualResult.home;
   const actualAway = actualResult.away;
   
@@ -64,6 +62,20 @@ const calculatePoints = (prediction, actualResult) => {
   return { points: 0, isExact: false, isExactDiff: false, isCorrectResult: false };
 };
 
+// ============================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================================
+
+const getStageType = (roundNumber) => {
+  if (roundNumber < 4) return 'group';
+  if (roundNumber >= 4 && roundNumber <= 8) return 'playoff';
+  return 'group';
+};
+
+// ============================================================
+// ОСНОВНОЙ КОМПОНЕНТ
+// ============================================================
+
 const StageStats = () => {
   const theme = useTheme();
   const [tournament, setTournament] = useState(null);
@@ -74,10 +86,12 @@ const StageStats = () => {
   const [activeStage, setActiveStage] = useState('group');
   const [groupStats, setGroupStats] = useState([]);
   const [playoffStats, setPlayoffStats] = useState([]);
+  const [totalStats, setTotalStats] = useState([]);
   const [hasGroupMatches, setHasGroupMatches] = useState(false);
   const [hasPlayoffMatches, setHasPlayoffMatches] = useState(false);
   const [groupMatchesCount, setGroupMatchesCount] = useState(0);
   const [playoffMatchesCount, setPlayoffMatchesCount] = useState(0);
+  const [totalMatchesCount, setTotalMatchesCount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -94,27 +108,29 @@ const StageStats = () => {
         const { data: matchesData } = await getMatches(tournamentData.id);
         setMatches(matchesData || []);
         
-        const groupMatchesList = matchesData?.filter(m => m.round_number <= 3) || [];
-        const playoffMatchesList = matchesData?.filter(m => m.round_number >= 4) || [];
+        // Разделяем матчи по этапам
+        const groupMatchesList = matchesData?.filter(m => getStageType(m.round_number) === 'group') || [];
+        const playoffMatchesList = matchesData?.filter(m => getStageType(m.round_number) === 'playoff') || [];
+        const allMatchesList = matchesData || [];
         
         setHasGroupMatches(groupMatchesList.length > 0);
         setHasPlayoffMatches(playoffMatchesList.length > 0);
         setGroupMatchesCount(groupMatchesList.filter(m => m.is_finished).length);
         setPlayoffMatchesCount(playoffMatchesList.filter(m => m.is_finished).length);
+        setTotalMatchesCount(allMatchesList.filter(m => m.is_finished).length);
         
         const { data: participantsData } = await getTournamentParticipants(tournamentData.id);
         setParticipants(participantsData || []);
         
+        // Загружаем прогнозы для всех участников
         const predictionsMap = {};
         for (const participant of participantsData) {
           let userPredictions = [];
           
-          // Получаем прогнозы в зависимости от типа участника
           if (participant.user_id) {
             const { data } = await getUserPredictionsForTournament(participant.user_id, tournamentData.id);
             userPredictions = data || [];
           } else if (participant.display_name) {
-            // Для виртуальных участников — прямой запрос по friend_name
             const { data, error } = await supabase
               .from('predictions')
               .select('*')
@@ -131,13 +147,12 @@ const StageStats = () => {
             userPredictionsMap[p.match_id] = p;
           });
           
-          // Ключ: user_id или display_name
           const key = participant.user_id || participant.display_name;
           predictionsMap[key] = userPredictionsMap;
         }
         setAllPredictions(predictionsMap);
         
-        calculateStats(groupMatchesList, playoffMatchesList, participantsData, predictionsMap);
+        calculateStats(groupMatchesList, playoffMatchesList, allMatchesList, participantsData, predictionsMap);
         
         if (playoffMatchesList.length === 0 && activeStage === 'playoff') {
           setActiveStage('group');
@@ -150,9 +165,10 @@ const StageStats = () => {
     }
   };
 
-  const calculateStats = (groupMatchesList, playoffMatchesList, participantsData, predictionsMap) => {
+  const calculateStats = (groupMatchesList, playoffMatchesList, allMatchesList, participantsData, predictionsMap) => {
     const groupStatsList = [];
     const playoffStatsList = [];
+    const totalStatsList = [];
     
     for (const participant of participantsData) {
       const groupStat = calculateParticipantStats(participant, groupMatchesList, predictionsMap);
@@ -160,13 +176,18 @@ const StageStats = () => {
       
       const playoffStat = calculateParticipantStats(participant, playoffMatchesList, predictionsMap);
       playoffStatsList.push({ ...participant, ...playoffStat });
+      
+      const totalStat = calculateParticipantStats(participant, allMatchesList, predictionsMap);
+      totalStatsList.push({ ...participant, ...totalStat });
     }
     
     groupStatsList.sort((a, b) => b.totalPoints - a.totalPoints);
     playoffStatsList.sort((a, b) => b.totalPoints - a.totalPoints);
+    totalStatsList.sort((a, b) => b.totalPoints - a.totalPoints);
     
     setGroupStats(groupStatsList);
     setPlayoffStats(playoffStatsList);
+    setTotalStats(totalStatsList);
   };
 
   const calculateParticipantStats = (participant, matchesList, predictionsMap) => {
@@ -177,14 +198,12 @@ const StageStats = () => {
     let predictionsCount = 0;
     let finishedMatches = 0;
     
-    // Определяем ключ для поиска прогнозов
     const predictionKey = participant.user_id || participant.display_name;
     
     for (const match of matchesList) {
       if (match.is_finished && match.actual_home_score !== null) {
         finishedMatches++;
         
-        // Используем правильный ключ
         const prediction = predictionsMap[predictionKey]?.[match.id];
         if (prediction) {
           predictionsCount++;
@@ -192,10 +211,7 @@ const StageStats = () => {
             home: match.actual_home_score,
             away: match.actual_away_score,
           };
-          const pointsData = calculatePoints(
-            { homeScore: prediction.home_score, awayScore: prediction.away_score },
-            actualResult
-          );
+          const pointsData = calculatePoints(prediction, actualResult);
           
           totalPoints += pointsData.points;
           if (pointsData.isExact) exactCount++;
@@ -218,7 +234,10 @@ const StageStats = () => {
     };
   };
 
-  // Колонки для таблицы
+  // ============================================================
+  // КОЛОНКИ ДЛЯ ТАБЛИЦЫ
+  // ============================================================
+  
   const columns = useMemo(
     () => [
       {
@@ -320,68 +339,92 @@ const StageStats = () => {
     [theme]
   );
 
-  // Создаём таблицу
+  // ============================================================
+  // СОЗДАНИЕ ТАБЛИЦЫ
+  // ============================================================
+  
+  const getCurrentStats = () => {
+    if (activeStage === 'group') return groupStats;
+    if (activeStage === 'playoff') return playoffStats;
+    return totalStats;
+  };
+
+  const getCurrentMatchesCount = () => {
+    if (activeStage === 'group') return groupMatchesCount;
+    if (activeStage === 'playoff') return playoffMatchesCount;
+    return totalMatchesCount;
+  };
+
+  const getCurrentHasMatches = () => {
+    if (activeStage === 'group') return hasGroupMatches;
+    if (activeStage === 'playoff') return hasPlayoffMatches;
+    return true;
+  };
+
   const table = useMaterialReactTable({
-  columns,
-  data: activeStage === 'group' ? groupStats : playoffStats,
-  enablePagination: true,
-  enableSorting: true,
-  enableColumnFilters: true,
-  enableGlobalFilter: true,
-  initialState: {
-    pagination: { pageSize: 15 },
-    sorting: [{ id: 'totalPoints', desc: true }],
-    density: 'compact',  // 👈 Компактный режим
-  },
-  state: { isLoading: loading },
-  // 👈 Включи компактный режим
-  density: 'compact',
-  enableRowNumbers: false,
-  enableFullScreenToggle: false,
-  enableHiding: false,
-  enableDensityToggle: true,  // Пользователь сможет сам менять плотность
-  localization: {
-    search: 'Поиск',
-    clearSearch: 'Очистить',
-    rowsPerPage: 'Строк',
-    showAll: 'Все',
-    all: 'Все',
-  },
-  layoutMode: 'semantic',
-  muiTableContainerProps: {
-    sx: {
-      maxHeight: 'calc(100vh - 200px)',
-      overflowX: 'auto',
-      overflowY: 'auto',
+    columns,
+    data: getCurrentStats(),
+    enablePagination: true,
+    enableSorting: true,
+    enableColumnFilters: true,
+    enableGlobalFilter: true,
+    initialState: {
+      pagination: { pageSize: 15 },
+      sorting: [{ id: 'totalPoints', desc: true }],
+      density: 'compact',
     },
-  },
-  muiTablePaperProps: {
-    elevation: 0,
-    sx: { 
-      borderRadius: 2, 
-      border: '1px solid', 
-      borderColor: 'divider',
-      overflow: 'hidden',
-      width: '100%',
+    state: { isLoading: loading },
+    density: 'compact',
+    enableRowNumbers: false,
+    enableFullScreenToggle: false,
+    enableHiding: false,
+    enableDensityToggle: true,
+    localization: {
+      search: 'Поиск',
+      clearSearch: 'Очистить',
+      rowsPerPage: 'Строк',
+      showAll: 'Все',
+      all: 'Все',
     },
-  },
-  muiTableHeadCellProps: {
-    sx: { 
-      fontWeight: 700, 
-      backgroundColor: alpha(theme.palette.background.default, 0.5),
-      whiteSpace: 'nowrap',
-      py: 1,  // 👈 Уменьшенный padding
-      px: 1,  // 👈 Уменьшенный padding
+    layoutMode: 'semantic',
+    muiTableContainerProps: {
+      sx: {
+        maxHeight: 'calc(100vh - 200px)',
+        overflowX: 'auto',
+        overflowY: 'auto',
+      },
     },
-  },
-  muiTableBodyCellProps: {
-    sx: {
-      whiteSpace: 'nowrap',
-      py: 0.5,  // 👈 Уменьшенный padding
-      px: 1,    // 👈 Уменьшенный padding
+    muiTablePaperProps: {
+      elevation: 0,
+      sx: { 
+        borderRadius: 2, 
+        border: '1px solid', 
+        borderColor: 'divider',
+        overflow: 'hidden',
+        width: '100%',
+      },
     },
-  },
-});
+    muiTableHeadCellProps: {
+      sx: { 
+        fontWeight: 700, 
+        backgroundColor: alpha(theme.palette.background.default, 0.5),
+        whiteSpace: 'nowrap',
+        py: 1,
+        px: 1,
+      },
+    },
+    muiTableBodyCellProps: {
+      sx: {
+        whiteSpace: 'nowrap',
+        py: 0.5,
+        px: 1,
+      },
+    },
+  });
+
+  // ============================================================
+  // РЕНДЕР
+  // ============================================================
 
   if (loading) {
     return (
@@ -391,64 +434,64 @@ const StageStats = () => {
     );
   }
 
-  const currentStats = activeStage === 'group' ? groupStats : playoffStats;
-  const hasMatches = activeStage === 'group' ? hasGroupMatches : hasPlayoffMatches;
-  const finishedMatchesCount = activeStage === 'group' ? groupMatchesCount : playoffMatchesCount;
-  const title = activeStage === 'group' ? 'Групповой этап' : 'Плей-офф';
-  const icon = activeStage === 'group' ? <GroupIcon color="primary" /> : <PlayoffIcon color="secondary" />;
+  const currentStats = getCurrentStats();
+  const currentMatchesCount = getCurrentMatchesCount();
+  const currentHasMatches = getCurrentHasMatches();
+  
+  const title = activeStage === 'group' ? 'Групповой этап' 
+    : activeStage === 'playoff' ? 'Плей-офф' 
+    : 'Общая статистика';
+  
+  const icon = activeStage === 'group' ? <GroupIcon color="primary" /> 
+    : activeStage === 'playoff' ? <PlayoffIcon color="secondary" /> 
+    : <DashboardIcon color="success" />;
 
   return (
     <Box sx={{ p: 3 }}>
+      {/* Заголовок */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
           📊 Статистика прогнозистов
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          {tournament?.name} {tournament?.year} — групповой этап и плей-офф
+          {tournament?.name} {tournament?.year} — групповой этап, плей-офф и общая статистика
         </Typography>
       </Box>
 
-      {/* Общая информация */}
-      {/* Общая информация по ВЫБРАННОМУ этапу, а не по всему турниру */}
+      {/* Общая информация по выбранному этапу */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-      <Grid item xs={6} sm={3}>
-        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {activeStage === 'group' 
-              ? groupStats.filter(s => s.matchesCount > 0).length 
-              : playoffStats.filter(s => s.matchesCount > 0).length}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">Участников</Typography>
-        </Paper>
-      </Grid>
-      <Grid item xs={6} sm={3}>
-        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.secondary.main, 0.05) }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {activeStage === 'group' ? groupMatchesCount : playoffMatchesCount}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">Сыграно матчей</Typography>
-        </Paper>
-      </Grid>
-      <Grid item xs={6} sm={3}>
-        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.success.main, 0.05) }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {activeStage === 'group' 
-              ? groupStats.reduce((sum, s) => sum + s.exactCount, 0)
-              : playoffStats.reduce((sum, s) => sum + s.exactCount, 0)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">Точных счетов</Typography>
-        </Paper>
-      </Grid>
-      <Grid item xs={6} sm={3}>
-        <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {activeStage === 'group' 
-              ? groupStats.reduce((sum, s) => sum + s.totalPoints, 0)
-              : playoffStats.reduce((sum, s) => sum + s.totalPoints, 0)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">Всего очков</Typography>
-        </Paper>
-      </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              {currentStats.filter(s => s.matchesCount > 0).length}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">Участников</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.secondary.main, 0.05) }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              {currentMatchesCount}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">Сыграно матчей</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.success.main, 0.05) }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              {currentStats.reduce((sum, s) => sum + s.exactCount, 0)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">Точных счетов</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              {currentStats.reduce((sum, s) => sum + s.totalPoints, 0)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">Всего очков</Typography>
+          </Paper>
+        </Grid>
       </Grid>
 
       {/* Переключатель этапов */}
@@ -472,54 +515,59 @@ const StageStats = () => {
           disabled={!hasPlayoffMatches}
         />
         <Tab 
+          value="total" 
+          label="📊 Общее" 
+          icon={<DashboardIcon />} 
+          iconPosition="start"
+        />
+        <Tab 
           value="analytics" 
-          label="📊 Динамика" 
+          label="📈 Динамика" 
           icon={<TrendingUpIcon />} 
           iconPosition="start"
         />
       </Tabs>
 
       {/* Сообщение, если нет матчей */}
-      {activeStage !== 'analytics' && !hasMatches && (
+      {activeStage !== 'analytics' && !currentHasMatches && activeStage !== 'total' && (
         <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
           {activeStage === 'group' 
-            ? 'Матчи группового этапа ещё не добавлены. Прогнозы появятся после добавления расписания.'
+            ? 'Матчи группового этапа ещё не добавлены.'
             : '🏆 Сетка плей-офф будет сформирована после завершения группового этапа.'}
         </Alert>
       )}
 
       {/* Сообщение, если нет завершённых матчей */}
-      {activeStage !== 'analytics' && hasMatches && finishedMatchesCount === 0 && (
+      {activeStage !== 'analytics' && currentHasMatches && currentMatchesCount === 0 && (
         <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
           На этом этапе пока нет завершённых матчей. Статистика появится после окончания матчей.
         </Alert>
       )}
 
       {/* Сообщение, если нет прогнозов */}
-      {activeStage !== 'analytics' && hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length === 0 && (
+      {activeStage !== 'analytics' && currentHasMatches && currentMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length === 0 && (
         <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3, borderRadius: 2 }}>
           Нет прогнозов на этом этапе. Сделайте прогнозы, чтобы увидеть статистику.
         </Alert>
       )}
 
       {/* Таблица */}
-      {/* Таблица для группового этапа и плей-офф */}
-      {activeStage !== 'analytics' && hasMatches && finishedMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length > 0 && (
+      {activeStage !== 'analytics' && currentHasMatches && currentMatchesCount > 0 && currentStats.filter(s => s.predictionsCount > 0).length > 0 && (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
             {icon}
             <Typography variant="h5" sx={{ fontWeight: 700 }}>{title}</Typography>
             <Chip label={`${currentStats.filter(s => s.predictionsCount > 0).length} участников`} size="small" />
-            <Chip label={`${finishedMatchesCount} матчей`} size="small" variant="outlined" />
+            <Chip label={`${currentMatchesCount} матчей`} size="small" variant="outlined" />
           </Box>
           <MaterialReactTable table={table} />
         </>
       )}
 
       {/* Аналитика */}
-      {activeStage === 'analytics' && <AnalyticsTab />}      
+      {activeStage === 'analytics' && <AnalyticsTab />}
 
-      {/* Легенда */}      
+      {/* Легенда */}
       <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#4caf50' }}>+3</Typography>
@@ -532,7 +580,7 @@ const StageStats = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2196f3' }}>+1</Typography>
           <Typography variant="caption">Исход</Typography>
-        </Box>                
+        </Box>
       </Box>
     </Box>
   );
